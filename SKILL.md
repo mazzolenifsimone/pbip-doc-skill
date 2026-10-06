@@ -13,7 +13,7 @@ description: |
 license: MIT
 metadata:
   version: 1.0.0
-  author: pbip-doc-skill
+  author: mazzolenifsimone
 ---
 
 # pbip-doc-skill - Agent Skill Guide
