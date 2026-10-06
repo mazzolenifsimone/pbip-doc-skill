@@ -1,0 +1,43 @@
+table DimProduct
+	lineageTag: e1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
+
+	column ProductKey
+		dataType: int64
+		isKey
+		summarizeBy: none
+		sourceColumn: ProductKey
+
+	column SubcategoryKey
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: SubcategoryKey
+
+	column ProductNumber
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ProductNumber
+
+	column ProductName
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ProductName
+
+	column Color
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Color
+
+	column StandardCost
+		dataType: decimal
+		formatString: \$#,0.00
+		summarizeBy: average
+		sourceColumn: StandardCost
+
+	partition DimProduct = m
+		mode: import
+		source =
+			let
+				Source = Sql.Database("sql-dwh.adventureworks.com", "AdventureWorksDW"),
+				dbo_DimProduct = Source{[Schema="dbo",Item="DimProduct"]}[Data]
+			in
+				dbo_DimProduct

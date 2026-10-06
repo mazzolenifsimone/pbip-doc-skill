@@ -1,0 +1,43 @@
+table DimDate
+	lineageTag: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
+
+	column DateKey
+		dataType: int64
+		isKey
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	column Date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: Date
+
+	column Year
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: Year
+
+	column MonthName
+		dataType: string
+		summarizeBy: none
+		sourceColumn: MonthName
+
+	column Quarter
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: Quarter
+
+	column DayOfWeek
+		dataType: string
+		summarizeBy: none
+		sourceColumn: DayOfWeek
+
+	partition DimDate = m
+		mode: import
+		source =
+			let
+				Source = Sql.Database("sql-dwh.adventureworks.com", "AdventureWorksDW"),
+				dbo_DimDate = Source{[Schema="dbo",Item="DimDate"]}[Data]
+			in
+				dbo_DimDate

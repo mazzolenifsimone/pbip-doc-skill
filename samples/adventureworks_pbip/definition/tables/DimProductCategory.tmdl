@@ -1,0 +1,22 @@
+table DimProductCategory
+	lineageTag: a3b4c5d6-e7f8-9a0b-1c2d-3e4f5a6b7c8d
+
+	column CategoryKey
+		dataType: int64
+		isKey
+		summarizeBy: none
+		sourceColumn: CategoryKey
+
+	column CategoryName
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CategoryName
+
+	partition DimProductCategory = m
+		mode: import
+		source =
+			let
+				Source = Sql.Database("sql-dwh.adventureworks.com", "AdventureWorksDW"),
+				dbo_DimProductCategory = Source{[Schema="dbo",Item="DimProductCategory"]}[Data]
+			in
+				dbo_DimProductCategory

@@ -1,0 +1,105 @@
+table FactInternetSales
+	lineageTag: e4f5a6b7-8c9d-0e1f-2a3b-4c5d6e7f8a9b
+
+	column SalesOrderNumber
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SalesOrderNumber
+
+	column CustomerKey
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: CustomerKey
+
+	column ProductKey
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: ProductKey
+
+	column OrderDateKey
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: OrderDateKey
+
+	column OrderQuantity
+		dataType: int64
+		formatString: #,##0
+		summarizeBy: sum
+		sourceColumn: OrderQuantity
+
+	column SalesAmount
+		dataType: decimal
+		formatString: \$#,0.00
+		summarizeBy: sum
+		sourceColumn: SalesAmount
+
+	column TotalProductCost
+		dataType: decimal
+		formatString: \$#,0.00
+		summarizeBy: sum
+		sourceColumn: TotalProductCost
+
+	column TaxAmt
+		dataType: decimal
+		formatString: \$#,0.00
+		summarizeBy: sum
+		sourceColumn: TaxAmt
+
+	column Margin = FactInternetSales[SalesAmount] - FactInternetSales[TotalProductCost]
+		dataType: decimal
+		formatString: \$#,0.00
+		summarizeBy: sum
+
+	column MarginRate =
+		DIVIDE(
+			FactInternetSales[SalesAmount] - FactInternetSales[TotalProductCost],
+			FactInternetSales[SalesAmount],
+			0
+		)
+		dataType: double
+		formatString: 0.0%
+
+	measure 'Total Sales' = SUM(FactInternetSales[SalesAmount])
+		formatString: \$#,0.00
+		displayFolder: "Sales Metrics"
+		description: "Total gross sales amount"
+
+	measure 'Total Cost' = SUM(FactInternetSales[TotalProductCost])
+		formatString: \$#,0.00
+		displayFolder: "Cost Metrics"
+		description: "Total cost of goods sold (COGS)"
+
+	measure 'Total Quantity' = SUM(FactInternetSales[OrderQuantity])
+		formatString: #,##0
+		displayFolder: "Sales Metrics"
+
+	measure 'Gross Margin' = [Total Sales] - [Total Cost]
+		formatString: \$#,0.00
+		displayFolder: "Margin Metrics"
+		description: "Gross margin calculated as Total Sales minus Total Cost"
+
+	measure 'Margin %' = SafeDivide([Gross Margin], [Total Sales], 0)
+		formatString: 0.0%
+		displayFolder: "Margin Metrics"
+		description: "Gross margin percentage over total sales"
+
+	measure 'Sales YTD' = TOTALYTD([Total Sales], 'DimDate'[Date])
+		formatString: \$#,0.00
+		displayFolder: "Time Intelligence"
+
+	measure 'Prior Year Sales' = CALCULATE([Total Sales], SAMEPERIODLASTYEAR('DimDate'[Date]))
+		formatString: \$#,0.00
+		displayFolder: "Time Intelligence"
+
+	measure 'Sales YoY Growth %' = DIVIDE([Total Sales] - [Prior Year Sales], [Prior Year Sales], 0)
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: "Time Intelligence"
+
+	partition FactInternetSales = m
+		mode: import
+		source =
+			let
+				Source = #"Staging Orders",
+				#"Filtered Rows" = Table.SelectRows(Source, each [SalesAmount] > 0)
+			in
+				#"Filtered Rows"

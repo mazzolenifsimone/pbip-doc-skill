@@ -1,0 +1,49 @@
+table DimCustomer
+	lineageTag: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
+
+	column CustomerKey
+		dataType: int64
+		isKey
+		summarizeBy: none
+		sourceColumn: CustomerKey
+
+	column GeographyKey
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: GeographyKey
+
+	column CustomerName
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CustomerName
+
+	column EmailAddress
+		dataType: string
+		summarizeBy: none
+		sourceColumn: EmailAddress
+
+	column CustomerType
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CustomerType
+
+	column 'Customer Segment' = IF([CustomerType] = "Corporate" || [GeographyKey] > 100, "Key Account", "Standard")
+		dataType: string
+		description: "Calculated customer segmentation based on type and geographic region"
+
+	measure 'Customer Count' = DISTINCTCOUNT(DimCustomer[CustomerKey])
+		formatString: #,##0
+		displayFolder: "Customer Metrics"
+
+	measure 'Sales Per Customer' = SafeDivide([Total Sales], [Customer Count], 0)
+		formatString: \$#,0.00
+		displayFolder: "Customer Metrics"
+
+	partition DimCustomer = m
+		mode: import
+		source =
+			let
+				Source = #"Staging Customers",
+				#"Cleaned Text" = Table.TransformColumns(Source, {{"CustomerName", Text.Trim, type text}})
+			in
+				#"Cleaned Text"

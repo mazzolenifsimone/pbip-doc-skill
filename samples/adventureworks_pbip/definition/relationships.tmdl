@@ -1,0 +1,27 @@
+relationship Rel_Sales_Customer
+	fromColumn: FactInternetSales.CustomerKey
+	toColumn: DimCustomer.CustomerKey
+
+relationship Rel_Sales_Product
+	fromColumn: FactInternetSales.ProductKey
+	toColumn: DimProduct.ProductKey
+
+relationship Rel_Sales_Date
+	fromColumn: FactInternetSales.OrderDateKey
+	toColumn: DimDate.DateKey
+
+relationship Rel_Customer_Geography
+	fromColumn: DimCustomer.GeographyKey
+	toColumn: DimGeography.GeographyKey
+
+relationship Rel_Geography_Country
+	fromColumn: DimGeography.CountryKey
+	toColumn: DimCountry.CountryKey
+
+relationship Rel_Product_Subcategory
+	fromColumn: DimProduct.SubcategoryKey
+	toColumn: DimProductSubcategory.SubcategoryKey
+
+relationship Rel_Subcategory_Category
+	fromColumn: DimProductSubcategory.CategoryKey
+	toColumn: DimProductCategory.CategoryKey

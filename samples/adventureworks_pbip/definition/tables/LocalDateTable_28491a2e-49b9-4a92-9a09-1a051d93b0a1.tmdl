@@ -1,0 +1,42 @@
+table LocalDateTable_28491a2e-49b9-4a92-9a09-1a051d93b0a1
+	isHidden
+	showAsVariationsOnly
+	lineageTag: e8f9a0b1-c2d3-e4f5-a6b7-c8d9e0f1a2b3
+
+	column Date
+		dataType: dateTime
+		isHidden
+		lineageTag: 11111111-2222-3333-4444-555555555555
+		dataCategory: PaddedDateTableDates
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Date]
+
+	column Year = YEAR([Date])
+		dataType: int64
+		isHidden
+		lineageTag: 22222222-3333-4444-5555-666666666666
+		dataCategory: Years
+		summarizeBy: none
+
+	column MonthNo = MONTH([Date])
+		dataType: int64
+		isHidden
+		lineageTag: 33333333-4444-5555-6666-777777777777
+		dataCategory: MonthOfYear
+		summarizeBy: none
+
+	hierarchy 'Date Hierarchy'
+		lineageTag: 44444444-5555-6666-7777-888888888888
+
+		level Year
+			lineageTag: 55555555-6666-7777-8888-999999999999
+			column: Year
+
+		level Month
+			lineageTag: 66666666-7777-8888-9999-000000000000
+			column: MonthNo
+
+	partition LocalDateTable_28491a2e = calculated
+		mode: import
+		source = Calendar(Date(2020,1,1), Date(2025,12,31))

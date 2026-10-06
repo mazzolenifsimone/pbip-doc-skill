@@ -1,0 +1,27 @@
+expression 'Staging Orders' =
+	let
+		Source = Sql.Database("sql-dwh.adventureworks.com", "AdventureWorksDW"),
+		dbo_FactInternetSales = Source{[Schema="dbo",Item="FactInternetSales"]}[Data],
+		#"Removed Unused Columns" = Table.SelectColumns(dbo_FactInternetSales, {"SalesOrderNumber", "CustomerKey", "ProductKey", "OrderDateKey", "OrderQuantity", "SalesAmount", "TotalProductCost", "TaxAmt"})
+	in
+		#"Removed Unused Columns"
+	lineageTag: 8f9b1c20-745a-4b92-9112-a7d5fa216110
+
+expression 'Staging Customers' =
+	let
+		Source = OData.Feed("https://crm.adventureworks.com/api/odata/v4/Customers", null, [Implementation="2.0"]),
+		#"Filtered Active" = Table.SelectRows(Source, each ([Status] = "Active")),
+		#"Renamed Columns" = Table.RenameColumns(#"Filtered Active", {{"Id", "CustomerKey"}, {"GeoId", "GeographyKey"}})
+	in
+		#"Renamed Columns"
+	lineageTag: 7129bc41-32d1-419b-a010-d87b9c9f2130
+
+expression 'Staging Geography' =
+	let
+		Source = SharePoint.Files("https://adventureworks.sharepoint.com/sites/bi/Shared Documents", [ApiVersion = 15]),
+		#"Selected Excel" = Table.SelectRows(Source, each ([Name] = "Master_Geographies.xlsx")),
+		#"Imported Workbook" = Excel.Workbook(#"Selected Excel"{0}[Content]),
+		Geo_Sheet = #"Imported Workbook"{[Item="Geographies",Kind="Sheet"]}[Data]
+	in
+		Geo_Sheet
+	lineageTag: c5f1a924-42b7-4180-8774-88414777d011

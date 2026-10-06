@@ -1,0 +1,13 @@
+function SafeDivide = (Numerator: double, Denominator: double, AlternativeResult: double = 0) =>
+	IF(
+		Denominator = 0,
+		AlternativeResult,
+		Numerator / Denominator
+	)
+	dataType: double
+	description: "Safely divides two numeric expressions, returning AlternativeResult when denominator is zero to prevent division by zero errors."
+
+function CalculateMarkup = (Cost: decimal, MarkupRate: double = 0.30) =>
+	Cost * (1 + MarkupRate)
+	dataType: decimal
+	description: "Applies a percentage markup rate to a base unit cost."

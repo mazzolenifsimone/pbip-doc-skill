@@ -1,0 +1,169 @@
+{
+  "name": "RetailSales_SemanticModel",
+  "compatibilityLevel": 1550,
+  "model": {
+    "culture": "en-US",
+    "dataSources": [
+      {
+        "type": "structured",
+        "name": "SQL_Warehouse",
+        "connectionDetails": {
+          "protocol": "tds",
+          "address": {
+            "server": "az-synapse-dw.windows.net",
+            "database": "RetailMart"
+          }
+        }
+      }
+    ],
+    "expressions": [
+      {
+        "name": "Staging_Orders",
+        "kind": "m",
+        "expression": [
+          "let",
+          "    Source = Sql.Database(\"az-synapse-dw.windows.net\", \"RetailMart\"),",
+          "    dbo_Orders = Source{[Schema=\"dbo\",Item=\"FactOrders\"]}[Data]",
+          "in",
+          "    dbo_Orders"
+        ]
+      }
+    ],
+    "tables": [
+      {
+        "name": "FactOrders",
+        "columns": [
+          { "name": "OrderID", "dataType": "int64" },
+          { "name": "StoreID", "dataType": "int64" },
+          { "name": "DateKey", "dataType": "int64" },
+          { "name": "Revenue", "dataType": "decimal", "formatString": "$#,0.00" },
+          { "name": "Discount", "dataType": "decimal" },
+          { "name": "NetSales", "dataType": "decimal", "formatString": "$#,0.00" }
+        ],
+        "partitions": [
+          {
+            "name": "FactOrders-Partition",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "query": [
+                "let",
+                "    Source = #\"Staging_Orders\",",
+                "    #\"Filter Active\" = Table.SelectRows(Source, each [Revenue] > 0)",
+                "in",
+                "    #\"Filter Active\""
+              ]
+            }
+          }
+        ],
+        "measures": [
+          {
+            "name": "Total Revenue",
+            "expression": "SUM(FactOrders[Revenue])",
+            "formatString": "$#,0.00"
+          },
+          {
+            "name": "Total Discount",
+            "expression": "SUM(FactOrders[Discount])",
+            "formatString": "$#,0.00"
+          },
+          {
+            "name": "Net Revenue",
+            "expression": "[Total Revenue] - [Total Discount]",
+            "formatString": "$#,0.00"
+          },
+          {
+            "name": "Discount %",
+            "expression": "DIVIDE([Total Discount], [Total Revenue], 0)",
+            "formatString": "0.0%"
+          }
+        ]
+      },
+      {
+        "name": "DimStore",
+        "columns": [
+          { "name": "StoreID", "dataType": "int64", "isKey": true },
+          { "name": "CityID", "dataType": "int64" },
+          { "name": "StoreName", "dataType": "string" },
+          { "name": "SquareMeters", "dataType": "int64" }
+        ],
+        "partitions": [
+          {
+            "name": "DimStore-Partition",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "query": "let Source = Sql.Database(\"az-synapse-dw.windows.net\", \"RetailMart\"), dbo_Stores = Source{[Schema=\"dbo\",Item=\"DimStore\"]}[Data] in dbo_Stores"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DimCity",
+        "columns": [
+          { "name": "CityID", "dataType": "int64", "isKey": true },
+          { "name": "CityName", "dataType": "string" },
+          { "name": "Region", "dataType": "string" }
+        ],
+        "partitions": [
+          {
+            "name": "DimCity-Partition",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "query": "let Source = OData.Feed(\"https://api.geodata.io/v1/cities\") in Source"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DimDate",
+        "columns": [
+          { "name": "DateKey", "dataType": "int64", "isKey": true },
+          { "name": "Date", "dataType": "dateTime" },
+          { "name": "Year", "dataType": "int64" },
+          { "name": "Month", "dataType": "string" }
+        ],
+        "partitions": [
+          {
+            "name": "DimDate-Partition",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "query": "let Source = Sql.Database(\"az-synapse-dw.windows.net\", \"RetailMart\"), dbo_Date = Source{[Schema=\"dbo\",Item=\"DimDate\"]}[Data] in dbo_Date"
+            }
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "Rel_Orders_Store",
+        "fromTable": "FactOrders",
+        "fromColumn": "StoreID",
+        "toTable": "DimStore",
+        "toColumn": "StoreID",
+        "cardinality": "OneToMany",
+        "isActive": true
+      },
+      {
+        "name": "Rel_Orders_Date",
+        "fromTable": "FactOrders",
+        "fromColumn": "DateKey",
+        "toTable": "DimDate",
+        "toColumn": "DateKey",
+        "cardinality": "OneToMany",
+        "isActive": true
+      },
+      {
+        "name": "Rel_Store_City",
+        "fromTable": "DimStore",
+        "fromColumn": "CityID",
+        "toTable": "DimCity",
+        "toColumn": "CityID",
+        "cardinality": "OneToMany",
+        "isActive": true
+      }
+    ]
+  }
+}

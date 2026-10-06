@@ -1,0 +1,28 @@
+table DimCountry
+	lineageTag: d3e4f5a6-b78c-9d0e-1f2a-3b4c5d6e7f8a
+
+	column CountryKey
+		dataType: int64
+		isKey
+		summarizeBy: none
+		sourceColumn: CountryKey
+
+	column CountryRegionName
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CountryRegionName
+
+	column Continent
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Continent
+
+	partition DimCountry = m
+		mode: import
+		source =
+			let
+				Source = #"Staging Geography",
+				#"Selected Columns" = Table.SelectColumns(Source, {"CountryKey", "CountryRegionName", "Continent"}),
+				#"Distinct Rows" = Table.Distinct(#"Selected Columns")
+			in
+				#"Distinct Rows"
