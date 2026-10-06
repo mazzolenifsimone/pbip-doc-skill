@@ -159,6 +159,48 @@ class TestMLineage(unittest.TestCase):
         self.assertEqual(dim_node.root_sources[0].server, "mysql.server.net")
         self.assertEqual(dim_node.root_sources[0].database, "users_db")
 
+    def test_excel_not_duplicated_as_local_file(self):
+        m_code = 'let Source = Excel.Workbook(File.Contents("C:\\Data\\Contoso.xlsx"), null, true) in Source'
+        raw_queries = {
+            "Cases": {
+                "m_code": m_code,
+                "target_table": "Cases",
+                "is_staging": False,
+            }
+        }
+        resolver = MLineageResolver(raw_queries)
+        node = resolver.get_lineage_for_table("Cases")
+        self.assertIsNotNone(node)
+        self.assertEqual(len(node.root_sources), 1)
+        self.assertEqual(node.root_sources[0].source_type, "EXCEL_FILE")
+        self.assertEqual(node.root_sources[0].endpoint_or_path, "C:\\Data\\Contoso.xlsx")
+
+        all_sources = resolver.get_all_root_sources()
+        self.assertEqual(len(all_sources), 1)
+        self.assertEqual(all_sources[0].source_type, "EXCEL_FILE")
+
+    def test_multi_source_distinct_files_both_preserved(self):
+        m_code = (
+            'let\n'
+            '    Source1 = Excel.Workbook(File.Contents("C:\\Data\\Sales.xlsx"), null, true),\n'
+            '    Source2 = File.Contents("C:\\Data\\GenericData.bin")\n'
+            'in\n'
+            '    Source1'
+        )
+        raw_queries = {
+            "CombinedTable": {
+                "m_code": m_code,
+                "target_table": "CombinedTable",
+                "is_staging": False,
+            }
+        }
+        resolver = MLineageResolver(raw_queries)
+        node = resolver.get_lineage_for_table("CombinedTable")
+        self.assertIsNotNone(node)
+        self.assertEqual(len(node.root_sources), 2)
+        source_types = {s.source_type for s in node.root_sources}
+        self.assertEqual(source_types, {"EXCEL_FILE", "LOCAL_FILE"})
+
 
 class TestStarSchemaAndOutriggers(unittest.TestCase):
     def test_fact_dim_lookup_snowflake_resolution(self):

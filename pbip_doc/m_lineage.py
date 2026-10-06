@@ -96,9 +96,39 @@ class MLineageResolver:
         external_tokens = tokens - local_steps
         return external_tokens.intersection(self.known_query_names)
 
+    @staticmethod
+    def _endpoint_key(val: str) -> str:
+        """Normalizes path/endpoint string for deduplication."""
+        return val.strip().lower().replace("/", "\\")
+
+    @classmethod
+    def _source_identity_key(cls, s: PowerQuerySource) -> str:
+        """Computes resource identity key prioritizing endpoint/connection over generic types."""
+        if s.endpoint_or_path:
+            return f"path:{cls._endpoint_key(s.endpoint_or_path)}"
+        if s.server and s.database:
+            return f"server_db:{s.server.strip().lower()} / {s.database.strip().lower()}"
+        if s.server:
+            return f"server:{s.server.strip().lower()}"
+        if s.connection_string:
+            return f"conn:{cls._endpoint_key(s.connection_string)}"
+        return f"{s.source_type}:{s.raw_snippet or ''}"
+
+    @classmethod
+    def _merge_source_into_dict(cls, sources_dict: Dict[str, PowerQuerySource], s: PowerQuerySource):
+        """Merges a source into dictionary, allowing specialized source types to supersede generic ones."""
+        key = cls._source_identity_key(s)
+        if key not in sources_dict:
+            sources_dict[key] = s
+        else:
+            existing = sources_dict[key]
+            if existing.source_type == "LOCAL_FILE" and s.source_type in ("EXCEL_FILE", "CSV_FILE"):
+                sources_dict[key] = s
+
     def _extract_sources(self, m_code: str) -> List[PowerQuerySource]:
-        """Scans M code for connector source calls."""
+        """Scans M code for connector source calls, keeping the most specific connector per endpoint."""
         sources: List[PowerQuerySource] = []
+        seen_endpoints: Set[str] = set()
 
         for pattern, source_type, mode in self.CONNECTOR_PATTERNS:
             for match in re.finditer(pattern, m_code, re.IGNORECASE):
@@ -106,6 +136,11 @@ class MLineageResolver:
                 if mode == "server_db":
                     server = match.group(1)
                     db = match.group(2)
+                    ep_key = f"server_db:{server.strip().lower()} / {db.strip().lower()}"
+                    if ep_key in seen_endpoints:
+                        continue
+                    seen_endpoints.add(ep_key)
+                    seen_endpoints.add(f"server:{server.strip().lower()}")
                     sources.append(
                         PowerQuerySource(
                             source_type=source_type,
@@ -117,6 +152,10 @@ class MLineageResolver:
                     )
                 elif mode == "server_only":
                     server = match.group(1)
+                    ep_key = f"server:{server.strip().lower()}"
+                    if ep_key in seen_endpoints:
+                        continue
+                    seen_endpoints.add(ep_key)
                     sources.append(
                         PowerQuerySource(
                             source_type=source_type,
@@ -127,6 +166,10 @@ class MLineageResolver:
                     )
                 elif mode in ("filepath", "url", "endpoint"):
                     val = match.group(1)
+                    ep_key = f"path:{self._endpoint_key(val)}"
+                    if ep_key in seen_endpoints:
+                        continue
+                    seen_endpoints.add(ep_key)
                     sources.append(
                         PowerQuerySource(
                             source_type=source_type,
@@ -288,8 +331,7 @@ class MLineageResolver:
 
             # Add direct sources
             for s in node.root_sources:
-                key = f"{s.source_type}:{s.connection_string}"
-                all_sources[key] = s
+                self._merge_source_into_dict(all_sources, s)
 
             # Breadth-first / depth-first search for ancestors
             queue = list(node.direct_dependencies)
@@ -302,8 +344,7 @@ class MLineageResolver:
 
                 # Inherit root sources from parent
                 for s in parent_node.root_sources:
-                    key = f"{s.source_type}:{s.connection_string}"
-                    all_sources[key] = s
+                    self._merge_source_into_dict(all_sources, s)
 
                 # Queue grandparents
                 for p_dep in parent_node.direct_dependencies:
@@ -354,7 +395,5 @@ class MLineageResolver:
         unique_sources: Dict[str, PowerQuerySource] = {}
         for node in self.nodes.values():
             for s in node.root_sources:
-                key = f"{s.source_type}:{s.connection_string}"
-                if key not in unique_sources:
-                    unique_sources[key] = s
+                self._merge_source_into_dict(unique_sources, s)
         return list(unique_sources.values())
