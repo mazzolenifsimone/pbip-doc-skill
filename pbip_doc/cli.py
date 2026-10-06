@@ -329,10 +329,16 @@ def main():
         for t in model.tables:
             role_badge = f"[{t.role.value}]"
             inherited_badge = " [Inherited Entity]" if t.is_inherited else ""
+            calc_tbl_badge = " [DAX Calculated Table]" if t.source_type == "CalculatedTable" else ""
             reasons = "; ".join(t.classification_reasoning.criteria_matched)
             calc_cols = [c.name for c in t.columns if c.is_calculated or c.expression]
             calc_badge = f" (DAX Calc Cols: {len(calc_cols)})" if calc_cols else ""
-            print(f"  * {role_badge:<20} {t.name:<25}{inherited_badge} (Columns: {len(t.columns)}{calc_badge})")
+            print(f"  * {role_badge:<20} {t.name:<25}{inherited_badge}{calc_tbl_badge} (Columns: {len(t.columns)}{calc_badge})")
+            if t.source_type == "CalculatedTable" and t.expression:
+                first_expr_line = t.expression.strip().split('\n')[0][:70]
+                print(f"      DAX Table Expression: {first_expr_line}")
+                if t.referenced_tables:
+                    print(f"      Referenced Tables: {', '.join(t.referenced_tables)}")
             if reasons:
                 print(f"      Reason: {reasons}")
             if t.role.value == "FACT":

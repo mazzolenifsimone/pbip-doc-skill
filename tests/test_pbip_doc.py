@@ -16,7 +16,7 @@ from pbip_doc.parser import PBIPParser
 from pbip_doc.m_lineage import MLineageResolver
 from pbip_doc.star_schema import StarSchemaResolver
 from pbip_doc.measure_analyzer import MeasureDependencyResolver
-from pbip_doc.model_schema import TableDefinition, ColumnDefinition, RelationshipDefinition, MeasureDefinition, TableRole
+from pbip_doc.model_schema import PBIPSemanticModel, TableDefinition, ColumnDefinition, RelationshipDefinition, MeasureDefinition, TableRole, TableRoleClassification
 from pbip_doc.docgen import MarkdownDocGenerator, DocGenConfig
 
 
@@ -66,7 +66,7 @@ class TestMarkdownDocGenerator(unittest.TestCase):
 
         fact_doc = docs["tables/FactOrders.md"]
         self.assertTrue(fact_doc.startswith("---"))
-        self.assertIn("doc_type: table_documentation", fact_doc)
+        self.assertIn("doc_type: data_model_table", fact_doc)
         self.assertIn("role: FACT", fact_doc)
         self.assertIn("# Table: `FactOrders`", fact_doc)
         self.assertIn("Columns Data Dictionary", fact_doc)
@@ -628,10 +628,10 @@ table DimProduct
                 parts = [p.strip() for p in re.split(r'(?<!\\)\|', line) if p.strip()]
                 self.assertEqual(len(parts), 5, f"Broken markdown table row: {line}")
 
-        # 2. Must contain dedicated Section 4.1 for calculated columns
-        self.assertIn("### 4.1 Formule DAX delle Colonne Calcolate", prod_doc)
-        self.assertIn("#### Colonna Calcolata: `Category_Group`", prod_doc)
-        self.assertIn("#### Colonna Calcolata: `Multiline_Calc`", prod_doc)
+        # 2. Must contain dedicated Section for calculated columns
+        self.assertIn("### 5.1 Calculated Column DAX Formulas", prod_doc)
+        self.assertIn("#### Calculated Column: `Category_Group`", prod_doc)
+        self.assertIn("#### Calculated Column: `Multiline_Calc`", prod_doc)
         self.assertIn("```dax", prod_doc)
 
 
@@ -1499,6 +1499,171 @@ function SimpleAdd = (x: int64, y: int64) => x + y
         self.assertEqual(fn.parameters[0].name, "x")
         self.assertEqual(fn.parameters[1].name, "y")
         self.assertEqual(fn.parameters_signature, "(x: int64, y: int64)")
+
+
+class TestCalculatedTables(unittest.TestCase):
+    def test_parse_tmdl_calculated_partition_date(self):
+        tmdl_content = """table LocalDateTable_28491a2e-49b9-4a92-9a09-1a051d93b0a1
+\tisHidden
+\tshowAsVariationsOnly
+\tlineageTag: e8f9a0b1-c2d3-e4f5-a6b7-c8d9e0f1a2b3
+
+\tcolumn Date
+\t\tdataType: dateTime
+\t\tisHidden
+\t\tlineageTag: 11111111-2222-3333-4444-555555555555
+\t\tdataCategory: PaddedDateTableDates
+\t\tsummarizeBy: none
+\t\tsourceColumn: [Date]
+
+\tpartition LocalDateTable_28491a2e = calculated
+\t\tmode: import
+\t\tsource = Calendar(Date(2020,1,1), Date(2025,12,31))
+
+\tannotation __PBI_LocalDateTable = true
+"""
+        parser = PBIPParser()
+        table_def, measures, m_code = parser._parse_single_table_tmdl(
+            tmdl_content, "LocalDateTable_28491a2e-49b9-4a92-9a09-1a051d93b0a1"
+        )
+        self.assertEqual(table_def.source_type, "CalculatedTable")
+        self.assertEqual(table_def.expression, "Calendar(Date(2020,1,1), Date(2025,12,31))")
+        self.assertEqual(m_code, "")
+
+        # Test Star Schema classification recognizes DAX Calendar generator
+        resolver = StarSchemaResolver([table_def], [])
+        resolver.classify_tables()
+        self.assertEqual(table_def.role, TableRole.DATE_DIMENSION)
+        self.assertIn("DAX Date table generator: CALENDAR / CALENDARAUTO", table_def.classification_reasoning.criteria_matched)
+
+    def test_parse_tmdl_calculated_partition_multiline_dax(self):
+        tmdl_content = """table 'Customer Summary'
+
+\tcolumn CustomerKey
+\t\tdataType: int64
+
+\tpartition 'Customer Summary' = calculated
+\t\tmode: import
+\t\tsource =
+\t\t\tSUMMARIZECOLUMNS(
+\t\t\t\t'DimCustomer'[CustomerKey],
+\t\t\t\t"TotalSales", [Total Sales],
+\t\t\t\t"TotalQty", SUM('FactOrders'[Quantity])
+\t\t\t)
+"""
+        parser = PBIPParser()
+        table_def, _, _ = parser._parse_single_table_tmdl(tmdl_content, "Customer Summary")
+        self.assertEqual(table_def.source_type, "CalculatedTable")
+        self.assertIn("SUMMARIZECOLUMNS", table_def.expression)
+        self.assertIn("'DimCustomer'[CustomerKey]", table_def.expression)
+
+        # Test measure analyzer dependency extraction on calculated table
+        dim_cust = TableDefinition(name="DimCustomer", role=TableRole.DIMENSION, classification_reasoning=TableRoleClassification(TableRole.DIMENSION, 1.0))
+        dim_cust.columns = [ColumnDefinition(name="CustomerKey", data_type="int64", is_key=True)]
+        fact_ord = TableDefinition(name="FactOrders", role=TableRole.FACT, classification_reasoning=TableRoleClassification(TableRole.FACT, 1.0))
+        fact_ord.columns = [ColumnDefinition(name="Quantity", data_type="int64")]
+
+        m_sales = MeasureDefinition(name="Total Sales", table="FactOrders", dax_expression="SUM(FactOrders[Quantity])")
+
+        analyzer = MeasureDependencyResolver(
+            measures=[m_sales],
+            tables=[dim_cust, fact_ord, table_def],
+        )
+        analyzer.analyze()
+
+        self.assertIn("DimCustomer", table_def.referenced_tables)
+        self.assertIn("FactOrders", table_def.referenced_tables)
+        self.assertIn("Total Sales", table_def.referenced_measures)
+        col_names = [(rc["table"], rc["column"]) for rc in table_def.referenced_columns]
+        self.assertIn(("DimCustomer", "CustomerKey"), col_names)
+        self.assertIn(("FactOrders", "Quantity"), col_names)
+
+    def test_parse_bim_calculated_table_partition(self):
+        bim_data = {
+            "name": "TestBimModel",
+            "compatibilityLevel": 1550,
+            "model": {
+                "culture": "en-US",
+                "tables": [
+                    {
+                        "name": "DimDatesCalc",
+                        "columns": [{"name": "Date", "dataType": "dateTime"}],
+                        "partitions": [
+                            {
+                                "name": "DimDatesCalc-Partition",
+                                "mode": "import",
+                                "source": {
+                                    "type": "calculated",
+                                    "expression": [
+                                        "CALENDARAUTO()"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "relationships": []
+            }
+        }
+        parser = PBIPParser()
+        model = parser.parse_bim_dict(bim_data)
+        self.assertEqual(len(model.tables), 1)
+        tbl = model.tables[0]
+        self.assertEqual(tbl.name, "DimDatesCalc")
+        self.assertEqual(tbl.source_type, "CalculatedTable")
+        self.assertEqual(tbl.expression, "CALENDARAUTO()")
+        self.assertEqual(tbl.role, TableRole.DATE_DIMENSION)
+
+    def test_calculated_table_markdown_documentation(self):
+        sample_model = {
+            "model_name": "TestCalcModel",
+            "source_format": "TMDL",
+            "tables": [
+                {
+                    "name": "DimDate",
+                    "role": "DATE_DIMENSION",
+                    "source_type": "CalculatedTable",
+                    "expression": "CALENDAR(DATE(2020, 1, 1), DATE(2025, 12, 31))",
+                    "referenced_tables": [],
+                    "referenced_columns": [],
+                    "referenced_measures": [],
+                    "columns": [
+                        {"name": "Date", "data_type": "dateTime", "is_key": True},
+                    ],
+                    "connected_dimensions": [],
+                    "connected_facts": [],
+                    "reachable_lookup_tables": [],
+                    "root_data_sources": [],
+                    "upstream_queries_chain": [],
+                    "classification_reasoning": {
+                        "confidence_score": 0.95,
+                        "criteria_matched": ["DAX Date table generator: CALENDAR / CALENDARAUTO"]
+                    }
+                }
+            ],
+            "measures": [],
+            "relationships": [],
+            "data_sources_summary": [],
+        }
+
+        generator = MarkdownDocGenerator()
+        docs = generator.generate_all_documents(sample_model)
+
+        # 1. Index contains DAX Calc badge and notice
+        self.assertIn("INDEX.md", docs)
+        index_doc = docs["INDEX.md"]
+        self.assertIn("🧮 DAX Calc", index_doc)
+        self.assertIn("Calculated Tables", index_doc)
+
+        # 2. Table doc contains DAX Table Expression chapter & banner
+        self.assertIn("tables/DimDate.md", docs)
+        tbl_doc = docs["tables/DimDate.md"]
+        self.assertIn("source_type: CalculatedTable", tbl_doc)
+        self.assertIn("🧮 **DAX Calculated Table**", tbl_doc)
+        self.assertIn("## 3. DAX Table Expression & Lineage", tbl_doc)
+        self.assertIn("```dax", tbl_doc)
+        self.assertIn("CALENDAR(DATE(2020, 1, 1), DATE(2025, 12, 31))", tbl_doc)
+        self.assertIn("In-Memory Calculated Table", tbl_doc)
 
 
 if __name__ == "__main__":

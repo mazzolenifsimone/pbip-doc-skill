@@ -171,7 +171,14 @@ class TableDefinition:
     columns: List[ColumnDefinition] = field(default_factory=list)
     is_hidden: bool = False
     description: Optional[str] = None
-    source_type: str = "PowerQuery"  # "PowerQuery", "CalculatedTable", "CalculationGroup"
+    source_type: str = "PowerQuery"  # "PowerQuery", "CalculatedTable", "CalculationGroup", "InheritedEntity"
+    expression: Optional[str] = None  # DAX table expression if calculated (partition = calculated)
+    
+    # DAX Lineage / Dependencies (for CalculatedTable)
+    referenced_tables: List[str] = field(default_factory=list)
+    referenced_columns: List[Dict[str, str]] = field(default_factory=list)
+    referenced_measures: List[str] = field(default_factory=list)
+    referenced_functions: List[str] = field(default_factory=list)
     
     # Power Query Lineage
     power_query_lineage: Optional[PowerQueryLineageNode] = None
@@ -304,6 +311,16 @@ class PBIPSemanticModel:
                 if rc.get("table") not in excluded_names
             ]
             fn.downstream_measures = [dm for dm in fn.downstream_measures if dm in valid_measure_names]
+
+        # Clean calculated table dependencies
+        for t in self.tables:
+            if t.source_type == "CalculatedTable":
+                t.referenced_tables = [rt for rt in t.referenced_tables if rt not in excluded_names]
+                t.referenced_columns = [
+                    rc for rc in t.referenced_columns
+                    if rc.get("table") not in excluded_names
+                ]
+                t.referenced_measures = [rm for rm in t.referenced_measures if rm in valid_measure_names]
 
         # 4. Clean and re-resolve Star Schema topology with remaining in-scope tables & relationships
         # This re-evaluates all surviving tables (e.g. date parameter tables previously linked

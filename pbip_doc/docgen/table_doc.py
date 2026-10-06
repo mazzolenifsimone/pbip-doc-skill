@@ -146,6 +146,10 @@ class TableDocBuilder:
             lines.append(f"> ℹ️ **Inherited Entity**: This table is inherited from upstream semantic model entity `{ent_label}`{src_label}.")
             lines.append("")
 
+        if self.table.get("source_type") == "CalculatedTable":
+            lines.append("> 🧮 **DAX Calculated Table**: This table is dynamically computed within the data model using a DAX table expression.")
+            lines.append("")
+
         if self.role == "FACT":
             lines.append(
                 f"The table **`{self.name}`** is classified as a **Fact Table**. "
@@ -266,7 +270,49 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_lineage_chapter(self) -> str:
-        """Chapter 3: Power Query (M) Lineage & Upstream Connectors."""
+        """Chapter 3: Power Query (M) Lineage & Upstream Connectors or DAX Table Calculation."""
+        if self.table.get("source_type") == "CalculatedTable":
+            lines = [
+                "## 3. DAX Table Expression & Lineage",
+                "",
+                "This table is dynamically computed in-memory within the semantic model using DAX, rather than loaded from an external Power Query data source.",
+            ]
+            calc_expr = self.table.get("expression")
+            if calc_expr:
+                lines.append("")
+                lines.append("### DAX Table Formula:")
+                lines.append("```dax")
+                lines.append(calc_expr.strip())
+                lines.append("```")
+            else:
+                lines.append("")
+                lines.append("> ℹ️ *DAX calculation formula defined at partition level.*")
+
+            ref_tables = self.table.get("referenced_tables", [])
+            ref_cols = self.table.get("referenced_columns", [])
+            ref_measures = self.table.get("referenced_measures", [])
+
+            if ref_tables or ref_cols or ref_measures:
+                lines.append("")
+                lines.append("### Upstream Model References:")
+                if ref_tables:
+                    tbl_links = []
+                    for t in ref_tables:
+                        clean_t = sanitize_filename(t)
+                        if self.config.is_table_published({"name": t, "is_inherited": False}):
+                            tbl_links.append(f"[`{t}`]({clean_t}.md)")
+                        else:
+                            tbl_links.append(f"`{t}`")
+                    lines.append(f"- **Referenced Tables**: {', '.join(tbl_links)}")
+                if ref_cols:
+                    col_strs = [f"`{rc.get('table', '')}`[{rc.get('column', '')}]" for rc in ref_cols]
+                    lines.append(f"- **Referenced Columns**: {', '.join(col_strs)}")
+                if ref_measures:
+                    m_links = [f"`[{m}]`" for m in ref_measures]
+                    lines.append(f"- **Referenced Measures**: {', '.join(m_links)}")
+
+            return "\n".join(lines)
+
         lines = [
             "## 3. Power Query Lineage & Physical Sources",
             "",
@@ -333,10 +379,16 @@ class TableDocBuilder:
         lines = ["## 4. Incremental Refresh Policy", ""]
 
         if not is_enabled:
-            lines.extend([
-                "> ℹ️ **No Incremental Refresh Configured**: This table is loaded via standard full refresh. "
-                "All data is reprocessed during scheduled dataset refreshes without partition-level rolling windows."
-            ])
+            if self.table.get("source_type") == "CalculatedTable":
+                lines.extend([
+                    "> ℹ️ **In-Memory Calculated Table**: This table is computed dynamically in-memory via DAX. "
+                    "Incremental refresh policies do not apply to calculated tables."
+                ])
+            else:
+                lines.extend([
+                    "> ℹ️ **No Incremental Refresh Configured**: This table is loaded via standard full refresh. "
+                    "All data is reprocessed during scheduled dataset refreshes without partition-level rolling windows."
+                ])
             return "\n".join(lines)
 
         mode = policy.get("mode", "import")
@@ -518,6 +570,12 @@ class TableDocBuilder:
             f"- **Entity Represented**: {self.role.lower()} table named `{self.name}`.",
             f"- **Key Attributes**: {sample_cols}.",
         ]
+
+        if self.table.get("source_type") == "CalculatedTable":
+            lines.append("- **Computation Type**: In-memory DAX Calculated Table (`partition = calculated`).")
+            if self.table.get("expression"):
+                expr_summary = self.table.get("expression").strip().split('\n')[0]
+                lines.append(f"- **DAX Table Definition**: `{expr_summary}`")
 
         if self.role == "FACT":
             lines.extend([

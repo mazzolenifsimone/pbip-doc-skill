@@ -13,6 +13,7 @@ Resolves full transitive lookup chains from Facts through Dimensions to Outrigge
 Vanilla Python implementation.
 """
 
+import re
 from typing import Dict, List, Set, Tuple, Optional, Any
 from .model_schema import (
     TableDefinition,
@@ -97,6 +98,9 @@ class StarSchemaResolver:
         date_cols = [c.name.lower() for c in table.columns if c.name.lower() in ("date", "data", "datekey", "year", "month", "day", "quarter", "anno", "mese")]
         if len(date_cols) >= 2 and many_count == 0:
             return True
+        if table.source_type == "CalculatedTable" and table.expression:
+            if re.search(r'\b(?:calendar|calendarauto)\s*\(', table.expression, re.IGNORECASE):
+                return True
         return False
 
     def classify_tables(self):
@@ -153,12 +157,21 @@ class StarSchemaResolver:
             )
             if total_rels == 0:
                 if self._is_date_table(table, 0, 0):
-                    self._assign_role(table, TableRole.DATE_DIMENSION, 0.90, ["Disconnected Date/Calendar table"])
+                    criteria = ["Disconnected Date/Calendar table"]
+                    if table.source_type == "CalculatedTable" and table.expression and re.search(r'\b(?:calendar|calendarauto)\s*\(', table.expression, re.IGNORECASE):
+                        criteria.append("DAX Date table generator: CALENDAR / CALENDARAUTO")
+                    self._assign_role(table, TableRole.DATE_DIMENSION, 0.90, criteria)
                 else:
-                    self._assign_role(
-                        table, TableRole.PARAMETER_UTILITY, 0.95,
-                        [f"Disconnected table with 0 active relationships ({len(table.columns)} columns) - Slicer, Parameter or Measure container"]
-                    )
+                    if table.source_type == "CalculatedTable":
+                        self._assign_role(
+                            table, TableRole.PARAMETER_UTILITY, 0.95,
+                            [f"Disconnected DAX calculated table ({len(table.columns)} columns) - Slicer, Parameter or Measure container"]
+                        )
+                    else:
+                        self._assign_role(
+                            table, TableRole.PARAMETER_UTILITY, 0.95,
+                            [f"Disconnected table with 0 active relationships ({len(table.columns)} columns) - Slicer, Parameter or Measure container"]
+                        )
 
         # Step 1: Date Dimensions
         for name, table in self.tables_map.items():
@@ -167,9 +180,12 @@ class StarSchemaResolver:
             many_count = len(outgoing_many_rels[name])
             one_count = len(incoming_one_rels[name])
             if self._is_date_table(table, many_count, one_count):
+                criteria = [f"Name or columns matched canonical date/calendar dimension patterns ({len(table.columns)} cols)"]
+                if table.source_type == "CalculatedTable" and table.expression and re.search(r'\b(?:calendar|calendarauto)\s*\(', table.expression, re.IGNORECASE):
+                    criteria.append("DAX Date table generator: CALENDAR / CALENDARAUTO")
                 self._assign_role(
                     table, TableRole.DATE_DIMENSION, 0.95,
-                    [f"Name or columns matched canonical date/calendar dimension patterns ({len(table.columns)} cols)"]
+                    criteria
                 )
 
         # Step 2: Bridge Tables
@@ -222,6 +238,10 @@ class StarSchemaResolver:
 
             if many_count >= 1 and one_count == 0:
                 parents = list(parent_tables[name])
+                # If this table's only parents are Bridge tables, defer to Step 4 (Dimension via Bridge)
+                bridge_names = {t.name for t in self.tables_map.values() if t.role == TableRole.BRIDGE}
+                if parents and all(p in bridge_names for p in parents):
+                    continue
                 self._assign_role(
                     table, TableRole.FACT, 0.95,
                     [f"Topology: Pure Many-side endpoint sink (0 incoming One-side parents, {many_count} outgoing foreign keys to {', '.join(parents)})"]

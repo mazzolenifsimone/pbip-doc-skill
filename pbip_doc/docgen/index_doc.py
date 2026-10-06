@@ -137,6 +137,8 @@ class IndexDocBuilder:
                     refresh_badge = "🔄 Incremental"
             elif t.get("is_inherited"):
                 refresh_badge = "📦 Inherited"
+            elif t.get("source_type") == "CalculatedTable":
+                refresh_badge = "🧮 DAX Calc"
             else:
                 refresh_badge = "Full"
             col_count = len(t.get("columns", []))
@@ -147,6 +149,14 @@ class IndexDocBuilder:
             else:
                 link = "— *(Inherited Entity)*"
             lines.append(f"| `{name}` | {role} | {refresh_badge} | {col_count} | {m_count} | {link} |")
+
+        calc_count = len([t for t in sorted_tables if t.get("source_type") == "CalculatedTable"])
+        if calc_count > 0:
+            lines.append("")
+            lines.append(
+                f"> ℹ️ **Calculated Tables**: {calc_count} tables (`source_type = CalculatedTable`) "
+                "are computed dynamically in-memory using DAX table expressions (`partition = calculated`)."
+            )
 
         inherited_count = len([t for t in sorted_tables if not self.config.is_table_published(t)])
         if inherited_count > 0:

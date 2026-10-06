@@ -8,6 +8,7 @@ Vanilla Python implementation.
 import json
 import os
 import re
+import textwrap
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
@@ -184,6 +185,7 @@ class PBIPParser:
             # Partitions (Power Query M, Calculated, or Inherited Entity)
             source_type = "PowerQuery"
             table_m_code = ""
+            table_expression = None
             is_inherited = False
             inherited_entity_name = None
             inherited_expression_source = None
@@ -194,6 +196,10 @@ class PBIPParser:
                 if isinstance(query_body, list):
                     query_body = "\n".join(query_body)
 
+                expr_body = part_source.get("expression", "")
+                if isinstance(expr_body, list):
+                    expr_body = "\n".join(expr_body)
+
                 if p_type == "entity" or "entityName" in part_source:
                     source_type = "InheritedEntity"
                     is_inherited = True
@@ -202,9 +208,12 @@ class PBIPParser:
                 elif p_type == "m" or "let" in query_body:
                     source_type = "PowerQuery"
                     table_m_code = query_body
-                elif p_type == "calculated" or part_source.get("expression"):
+                elif p_type == "calculated" or expr_body:
                     source_type = "CalculatedTable"
                     table_m_code = ""
+                    calc_candidate = expr_body or query_body
+                    if calc_candidate:
+                        table_expression = calc_candidate.strip()
 
             if tbl.get("calculationGroup"):
                 source_type = "CalculationGroup"
@@ -244,7 +253,7 @@ class PBIPParser:
                     )
                 )
 
-            t_refresh_policy = t.get("refreshPolicy")
+            t_refresh_policy = tbl.get("refreshPolicy")
             inc_policy = None
             if t_refresh_policy and isinstance(t_refresh_policy, dict):
                 src_expr = t_refresh_policy.get("sourceExpression")
@@ -274,6 +283,7 @@ class PBIPParser:
                 is_hidden=is_hidden,
                 description=description,
                 source_type=source_type,
+                expression=table_expression,
                 incremental_refresh_policy=inc_policy,
                 is_inherited=is_inherited,
                 inherited_entity_name=inherited_entity_name,
@@ -527,6 +537,7 @@ class PBIPParser:
         description = None
         is_hidden = False
         source_type = "PowerQuery"
+        table_expression = None
 
         # Check table header (handles regular: table TableName, quoted: table 'Table Name', and calculated: table TableName = <DAX>)
         first_line = lines[0].strip() if lines else ""
@@ -535,6 +546,9 @@ class PBIPParser:
             table_name = (t_match.group(2) or t_match.group(3) or "").strip()
             if t_match.group(4) is not None:
                 source_type = "CalculatedTable"
+                header_expr = t_match.group(4).strip()
+                if header_expr:
+                    table_expression = header_expr
 
         columns: List[ColumnDefinition] = []
         measures: List[MeasureDefinition] = []
@@ -546,11 +560,16 @@ class PBIPParser:
         inherited_expression_source = None
 
         entity_partition_match = re.search(
-            r'partition\s+.*?\s*=\s*entity\b(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\Z)',
+            r'partition\s+.*?\s*=\s*entity\b(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\s*\Z)',
             content,
             re.DOTALL | re.IGNORECASE | re.MULTILINE
         )
         m_partition_match = re.search(r'partition\s+.*?\s*=\s*m\b.*?source\s*=\s*(.*)', content, re.DOTALL | re.IGNORECASE)
+        calc_partition_match = re.search(
+            r'partition\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))?\s*=\s*calculated\b(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\s*\Z)',
+            content,
+            re.DOTALL | re.IGNORECASE | re.MULTILINE
+        )
 
         if entity_partition_match:
             source_type = "InheritedEntity"
@@ -565,8 +584,21 @@ class PBIPParser:
             # Stop before annotations or next major block
             table_m_code = re.split(r'\n\s*(?:annotation|lineageTag)\b', table_m_code)[0]
             source_type = "PowerQuery"
-        elif "partition " in content and "= calculated" in content:
+        elif calc_partition_match or re.search(r'partition\b.*=\s*calculated\b', content, re.IGNORECASE):
             source_type = "CalculatedTable"
+            if calc_partition_match:
+                body = calc_partition_match.group("body") or ""
+                src_m = re.search(r'source\s*=\s*(.*)', body, re.DOTALL | re.IGNORECASE)
+                if src_m:
+                    expr_raw = src_m.group(1).strip()
+                    expr_raw = re.split(r'\n\s*(?:annotation|lineageTag)\b', expr_raw)[0].strip()
+                    table_expression = textwrap.dedent(expr_raw).strip()
+            if not table_expression:
+                fb_m = re.search(r'partition\b.*=\s*calculated\b.*?source\s*=\s*(.*)', content, re.DOTALL | re.IGNORECASE)
+                if fb_m:
+                    expr_raw = fb_m.group(1).strip()
+                    expr_raw = re.split(r'\n\s*(?:annotation|lineageTag|column|measure|partition|hierarchy)\b', expr_raw)[0].strip()
+                    table_expression = textwrap.dedent(expr_raw).strip()
 
         # Extract Columns
         # Handles both regular columns:
@@ -681,6 +713,7 @@ class PBIPParser:
             is_hidden=is_hidden,
             description=description,
             source_type=source_type,
+            expression=table_expression,
             incremental_refresh_policy=inc_policy,
             is_inherited=is_inherited,
             inherited_entity_name=inherited_entity_name,
@@ -693,7 +726,7 @@ class PBIPParser:
     def _parse_tmdl_refresh_policy(self, content: str) -> Optional[IncrementalRefreshPolicy]:
         """Parses TMDL refreshPolicy block or JSON assignment."""
         match = re.search(
-            r'^\s{1,4}refreshPolicy(?:\s*=\s*(?P<json_str>\{[\s\S]*?\}))?(?P<rest>[^\r\n]*(?:\n\s{2,}[\s\S]*?)?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\Z)',
+            r'^\s{1,4}refreshPolicy(?:\s*=\s*(?P<json_str>\{[\s\S]*?\}))?(?P<rest>[^\r\n]*(?:\n\s{2,}[\s\S]*?)?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\s*\Z)',
             content,
             re.MULTILINE
         )

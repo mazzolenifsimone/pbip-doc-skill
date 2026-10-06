@@ -90,6 +90,19 @@ class MeasureDependencyResolver:
             fn_obj.downstream_measures = sorted(list(set(fn_obj.downstream_measures)))
             fn_obj.downstream_functions = sorted(list(set(fn_obj.downstream_functions)))
 
+        # Step 3.5: Analyze Calculated Tables expressions for table/column/measure dependencies
+        for tbl in self.tables_map.values():
+            if tbl.source_type == "CalculatedTable" and tbl.expression:
+                tbl_measures, tbl_cols, tbl_tables, tbl_funcs = self._parse_dax_references(
+                    tbl.expression, current_measure_name=""
+                )
+                tbl.referenced_tables = sorted([t for t in tbl_tables if t != tbl.name])
+                tbl.referenced_columns = [
+                    {"table": t, "column": c} for t, c in sorted(list(tbl_cols))
+                ]
+                tbl.referenced_measures = sorted(list(tbl_measures))
+                tbl.referenced_functions = sorted(list(tbl_funcs))
+
         # Step 4: Compute transitive upstream measures & calculation depth (topological)
         dag: Dict[str, List[str]] = {}
         for measure_name, measure in self.measures_map.items():
@@ -198,6 +211,13 @@ class MeasureDependencyResolver:
                         referenced_columns.add((tbl_name, col_name))
                         referenced_tables.add(tbl_name)
                         break
+
+        # Pattern 3: Explicit quoted table references 'Table Name'
+        quoted_table_pattern = re.compile(r"'([^']+)'")
+        for match in quoted_table_pattern.finditer(cleaned_dax):
+            tbl_candidate = match.group(1).strip()
+            if tbl_candidate in self.tables_map and tbl_candidate != current_measure_name:
+                referenced_tables.add(tbl_candidate)
 
         return direct_measures, referenced_columns, referenced_tables, referenced_functions
 
