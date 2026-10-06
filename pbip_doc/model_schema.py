@@ -326,7 +326,11 @@ class PBIPSemanticModel:
         # This re-evaluates all surviving tables (e.g. date parameter tables previously linked
         # solely to auto date tables now have 0 relationships and become PARAMETER_UTILITY).
         from .star_schema import StarSchemaResolver
-        resolver = StarSchemaResolver(self.tables, self.relationships)
+        resolver = StarSchemaResolver(
+            self.tables,
+            self.relationships,
+            is_table_excluded_fn=is_excluded_fn,
+        )
         resolver.classify_tables()
         self.star_schema = resolver.resolve_topology_and_snowflakes()
 

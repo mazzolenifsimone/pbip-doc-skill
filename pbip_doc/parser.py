@@ -1237,7 +1237,12 @@ class PBIPParser:
                 ]
 
         # --- 2. Star Schema & Snowflake Outrigger Resolution ---
-        star_resolver = StarSchemaResolver(tables, relationships)
+        is_excl_fn = cfg.is_table_excluded if cfg and hasattr(cfg, "is_table_excluded") else None
+        star_resolver = StarSchemaResolver(
+            tables,
+            relationships,
+            is_table_excluded_fn=is_excl_fn,
+        )
         star_resolver.classify_tables()
         star_topology = star_resolver.resolve_topology_and_snowflakes()
 

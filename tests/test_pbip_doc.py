@@ -79,7 +79,7 @@ class TestMarkdownDocGenerator(unittest.TestCase):
         self.assertIn("calculation_depth: 0", measure_doc)
         self.assertIn("```dax", measure_doc)
         self.assertIn("SUM(FactOrders[Amount])", measure_doc)
-        self.assertIn("## 6. Semantic Context for AI & RAG", measure_doc)
+        self.assertIn("## Semantic Context for AI & RAG", measure_doc)
 
 
 class TestMLineage(unittest.TestCase):
@@ -977,12 +977,12 @@ table FactSales
 
         self.assertIn("has_incremental_refresh: true", md)
         self.assertIn("hybrid_table", md)
-        self.assertIn("## 4. Incremental Refresh Policy", md)
+        self.assertIn("## Incremental Refresh Policy", md)
         self.assertIn("⚡ Hybrid (Import + DirectQuery)", md)
         self.assertIn("3 Years", md)
         self.assertIn("7 Days", md)
         self.assertIn("let Check = ... in Check", md)
-        self.assertIn("## 5. Columns Data Dictionary", md)
+        self.assertIn("## Columns Data Dictionary", md)
 
     def test_table_doc_without_incremental_refresh(self):
         from pbip_doc.docgen.table_doc import TableDocBuilder
@@ -998,7 +998,7 @@ table FactSales
         md = builder.build_markdown()
 
         self.assertIn("has_incremental_refresh: false", md)
-        self.assertIn("## 4. Incremental Refresh Policy", md)
+        self.assertIn("## Incremental Refresh Policy", md)
         self.assertIn("No Incremental Refresh Configured", md)
 
 
@@ -1068,7 +1068,7 @@ class TestExpressionDocGen(unittest.TestCase):
 
         self.assertIn("doc_type: power_query_expression", md)
         self.assertIn("expression_type: INLINE_TABLE", md)
-        self.assertIn("## 2. Inline Table Definition (`#table`)", md)
+        self.assertIn("## Inline Table Definition (`#table`)", md)
         self.assertIn("| `Code` | `Label` |", md)
         self.assertIn("| A | Alpha |", md)
         self.assertIn("FactOrders", md)
@@ -1106,7 +1106,7 @@ class TestExpressionDocGen(unittest.TestCase):
         self.assertIn("INDEX.md", docs)
         self.assertIn("tables/FactOrders.md", docs)
         self.assertIn("expressions/Staging_Orders.md", docs)
-        self.assertIn("## 4. Power Query Expressions & Shared ETL Queries", docs["INDEX.md"])
+        self.assertIn("## Power Query Expressions & Shared ETL Queries", docs["INDEX.md"])
         self.assertIn("Staging_Orders", docs["INDEX.md"])
 
 
@@ -1660,7 +1660,7 @@ class TestCalculatedTables(unittest.TestCase):
         tbl_doc = docs["tables/DimDate.md"]
         self.assertIn("source_type: CalculatedTable", tbl_doc)
         self.assertIn("🧮 **DAX Calculated Table**", tbl_doc)
-        self.assertIn("## 3. DAX Table Expression & Lineage", tbl_doc)
+        self.assertIn("## DAX Table Expression & Lineage", tbl_doc)
         self.assertIn("```dax", tbl_doc)
         self.assertIn("CALENDAR(DATE(2020, 1, 1), DATE(2025, 12, 31))", tbl_doc)
         self.assertIn("In-Memory Calculated Table", tbl_doc)
@@ -1712,9 +1712,216 @@ class TestCalculatedTables(unittest.TestCase):
             "active_relationships": [],
         }
         md = TableDocBuilder(tbl_data, {"tables": [tbl_data], "measures": []}, DocGenConfig()).build_markdown()
-        self.assertNotIn("```dax\n```", md)
-        self.assertNotIn("````", md)
-        self.assertIn("- **DAX Table Definition**: `VAR StartDate = DATE(2020, 1, 1)`", md)
+        self.assertNotIn("- **DAX Table Definition**:", md)
+        self.assertIn("- **Computation Type**: In-memory DAX Calculated Table", md)
+
+
+
+class TestTopologicalKeyResolution(unittest.TestCase):
+    def test_topological_key_resolution_italian_and_erp_naming(self):
+        """
+        Verify that non-standard column names (e.g. Italian or ERP codes) participating
+        in relationships are correctly identified as keys topologically and not as metrics.
+        """
+        col_codice_fact = ColumnDefinition(name="CodiceCliente", data_type="int64")
+        col_importo = ColumnDefinition(name="ImportoVendita", data_type="decimal")
+        fact_sales = TableDefinition(
+            name="FactVendite",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_codice_fact, col_importo],
+        )
+
+        col_codice_dim = ColumnDefinition(name="CodiceCliente", data_type="int64")
+        col_nome = ColumnDefinition(name="RagioneSociale", data_type="string")
+        dim_clienti = TableDefinition(
+            name="DimClienti",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_codice_dim, col_nome],
+        )
+
+        rel = RelationshipDefinition(
+            id="rel_clienti",
+            from_table="FactVendite",
+            from_column="CodiceCliente",
+            to_table="DimClienti",
+            to_column="CodiceCliente",
+            cardinality="1:N",
+            cross_filtering_behavior="Single",
+            is_active=True,
+        )
+
+        resolver = StarSchemaResolver([fact_sales, dim_clienti], [rel])
+        self.assertTrue(resolver._is_key_column(col_codice_fact, "FactVendite"))
+        self.assertFalse(resolver._is_metric_column(col_codice_fact, "FactVendite"))
+        self.assertTrue(resolver._is_metric_column(col_importo, "FactVendite"))
+
+    def test_inactive_relationship_role_playing_dimension(self):
+        """
+        Verify that columns involved in inactive relationships (e.g. role-playing dimensions)
+        are also recognized as keys and not erroneously classified as metric columns.
+        """
+        col_ship_date = ColumnDefinition(name="DataSpedizione", data_type="int64")
+        fact_sales = TableDefinition(
+            name="FactVendite",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_ship_date],
+        )
+        col_date = ColumnDefinition(name="Data", data_type="int64")
+        dim_date = TableDefinition(
+            name="DimTempo",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_date],
+        )
+
+        rel_inactive = RelationshipDefinition(
+            id="rel_ship",
+            from_table="FactVendite",
+            from_column="DataSpedizione",
+            to_table="DimTempo",
+            to_column="Data",
+            cardinality="1:N",
+            cross_filtering_behavior="Single",
+            is_active=False,
+        )
+
+        resolver = StarSchemaResolver([fact_sales, dim_date], [rel_inactive])
+        self.assertTrue(resolver._is_key_column(col_ship_date, "FactVendite"))
+        self.assertFalse(resolver._is_metric_column(col_ship_date, "FactVendite"))
+
+    def test_degenerate_dimension_semantic_fallback(self):
+        """
+        Verify that degenerate dimension columns (e.g. TransactionID) with no relationships
+        are still recognized as keys via semantic fallback rather than treated as business metrics.
+        """
+        col_tx = ColumnDefinition(name="TransactionID", data_type="int64")
+        fact_sales = TableDefinition(
+            name="FactSales",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_tx],
+        )
+
+        resolver = StarSchemaResolver([fact_sales], [])
+        self.assertTrue(resolver._is_key_column(col_tx, "FactSales"))
+        self.assertFalse(resolver._is_metric_column(col_tx, "FactSales"))
+
+    def test_relationships_with_excluded_tables_kept_out_of_perimeter(self):
+        """
+        Verify that relationships with excluded tables (e.g. auto date tables LocalDateTable_*)
+        are kept out of perimeter and do not cause datetime columns to be flagged as keys.
+        """
+        col_date = ColumnDefinition(name="OrderDate", data_type="dateTime")
+        fact_sales = TableDefinition(
+            name="FactSales",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_date],
+        )
+        col_auto_date = ColumnDefinition(name="Date", data_type="dateTime")
+        auto_date_tbl = TableDefinition(
+            name="LocalDateTable_9c1d3e5f",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_auto_date],
+        )
+
+        rel_auto = RelationshipDefinition(
+            id="rel_auto",
+            from_table="FactSales",
+            from_column="OrderDate",
+            to_table="LocalDateTable_9c1d3e5f",
+            to_column="Date",
+            cardinality="1:N",
+            cross_filtering_behavior="Single",
+            is_active=True,
+        )
+
+        resolver = StarSchemaResolver([fact_sales], [rel_auto])
+        self.assertEqual(len(resolver.relationships), 0)
+        self.assertEqual(len(resolver.all_relationships), 0)
+        self.assertFalse(resolver._is_key_column(col_date, "FactSales"))
+
+    def test_tables_with_out_of_scope_true_remain_in_perimeter(self):
+        """
+        Verify that tables with out_of_scope == True (e.g. inherited partition entities)
+        are NOT excluded from the relationship perimeter and participate in topology.
+        """
+        col_ent_fact = ColumnDefinition(name="EntityKey", data_type="int64")
+        fact = TableDefinition(
+            name="FactSales",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_ent_fact],
+        )
+        col_ent_dim = ColumnDefinition(name="EntityKey", data_type="int64")
+        dim_inherited = TableDefinition(
+            name="DimInheritedEntity",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            out_of_scope=True,
+            is_inherited=True,
+            columns=[col_ent_dim],
+        )
+
+        rel = RelationshipDefinition(
+            id="rel_entity",
+            from_table="FactSales",
+            from_column="EntityKey",
+            to_table="DimInheritedEntity",
+            to_column="EntityKey",
+            cardinality="1:N",
+            cross_filtering_behavior="Single",
+            is_active=True,
+        )
+
+        resolver = StarSchemaResolver([fact, dim_inherited], [rel])
+        self.assertEqual(len(resolver.relationships), 1)
+        self.assertEqual(len(resolver.all_relationships), 1)
+        self.assertTrue(resolver._is_key_column(col_ent_fact, "FactSales"))
+        self.assertTrue(resolver._is_key_column(col_ent_dim, "DimInheritedEntity"))
+
+    def test_custom_excluded_table_patterns_from_config(self):
+        """
+        Verify that custom patterns configured in DocGenConfig.excluded_table_patterns
+        take direct effect on StarSchemaResolver relationship filtering.
+        """
+        col_staging = ColumnDefinition(name="CustomKey", data_type="int64")
+        fact_sales = TableDefinition(
+            name="FactSales",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[col_staging],
+        )
+        staging_tbl = TableDefinition(
+            name="Staging_Orders",
+            role=TableRole.UNKNOWN,
+            classification_reasoning=None,
+            columns=[ColumnDefinition(name="CustomKey", data_type="int64")],
+        )
+        rel = RelationshipDefinition(
+            id="rel_staging",
+            from_table="FactSales",
+            from_column="CustomKey",
+            to_table="Staging_Orders",
+            to_column="CustomKey",
+            cardinality="1:N",
+            cross_filtering_behavior="Single",
+            is_active=True,
+        )
+
+        cfg = DocGenConfig(excluded_table_patterns=[r"^Staging_.*"])
+        resolver = StarSchemaResolver(
+            [fact_sales, staging_tbl],
+            [rel],
+            is_table_excluded_fn=cfg.is_table_excluded,
+        )
+        self.assertEqual(len(resolver.relationships), 0)
+        self.assertEqual(len(resolver.all_relationships), 0)
+        self.assertNotIn("factsales", resolver.relationship_columns)
 
 
 if __name__ == "__main__":

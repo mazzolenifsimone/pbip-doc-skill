@@ -87,7 +87,7 @@ class IndexDocBuilder:
 
     def _build_sources_section(self) -> str:
         lines = [
-            "## 1. Detected Physical Data Sources",
+            "## Detected Physical Data Sources",
             "",
             "| Connector Type | Connection / Target | Server | Database |",
             "| :--- | :--- | :--- | :--- |",
@@ -102,7 +102,7 @@ class IndexDocBuilder:
 
     def _build_tables_catalog(self, tables: Optional[List[Dict[str, Any]]] = None, measures: Optional[List[Dict[str, Any]]] = None) -> str:
         lines = [
-            "## 2. Tables Catalog",
+            "## Tables Catalog",
             "",
             "Tables analyzed and classified according to topological and heuristic criteria:",
             "",
@@ -178,7 +178,7 @@ class IndexDocBuilder:
 
     def _build_measures_catalog(self, measures: Optional[List[Dict[str, Any]]] = None) -> str:
         lines = [
-            "## 3. DAX Measures Catalog",
+            "## DAX Measures Catalog",
             "",
             "DAX measures indexed by calculation hierarchy (Calculation Depth):",
             "",
@@ -222,7 +222,7 @@ class IndexDocBuilder:
             return ""
 
         lines = [
-            "## 4. User-Defined Functions Catalog (UDFs)",
+            "## User-Defined Functions Catalog (UDFs)",
             "",
             "DAX User-Defined Functions (UDFs) defined at semantic model scope (`functions.tmdl`):",
             "",
@@ -246,9 +246,8 @@ class IndexDocBuilder:
         if not exprs:
             return ""
 
-        sec_num = 5 if self.model.get("functions") else 4
         lines = [
-            f"## {sec_num}. Power Query Expressions & Shared ETL Queries ({len(exprs)})",
+            f"## Power Query Expressions & Shared ETL Queries ({len(exprs)})",
             "",
             "Staging queries, parameters, functions, and inline table definitions in the ETL compartment:",
             "",

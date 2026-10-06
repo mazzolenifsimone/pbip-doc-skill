@@ -150,7 +150,7 @@ class ExpressionDocBuilder:
             "",
             f"**Type**: {badge} | **Steps**: `{len(self.steps)}` | **Downstream Tables**: `{len(self.downstream_tables)}` | **Sources**: `{len(self.root_sources)}`",
             "",
-            "## 1. Overview & ETL Purpose",
+            "## Overview & ETL Purpose",
         ]
 
         if self.description:
@@ -188,9 +188,9 @@ class ExpressionDocBuilder:
         return "\n".join(lines)
 
     def _build_inline_table_chapter(self) -> str:
-        """Chapter 2: Rendered Markdown Table for #table definitions."""
+        """Rendered Markdown Table for #table definitions."""
         lines = [
-            "## 2. Inline Table Definition (`#table`)",
+            "## Inline Table Definition (`#table`)",
             "",
             f"This expression contains a static in-memory table defined via `#table` with **{len(self.inline_cols)} columns** and **{len(self.inline_rows)} rows**:",
             "",
@@ -205,9 +205,9 @@ class ExpressionDocBuilder:
         return "\n".join(lines)
 
     def _build_lineage_chapter(self) -> str:
-        """Chapter 3: Lineage, Upstream Data Sources & Downstream Consumer Tables."""
+        """Lineage, Upstream Data Sources & Downstream Consumer Tables."""
         lines = [
-            "## 3. Power Query Lineage & Dependencies",
+            "## Power Query Lineage & Dependencies",
             "",
             "This section maps data flow through this expression across the ETL compartment.",
         ]
@@ -261,9 +261,9 @@ class ExpressionDocBuilder:
         return "\n".join(lines)
 
     def _build_steps_chapter(self) -> str:
-        """Chapter 4: Power Query Steps Breakdown."""
+        """Power Query Steps Breakdown."""
         lines = [
-            f"## 4. Transformation Steps ({len(self.steps)} steps)",
+            f"## Transformation Steps ({len(self.steps)} steps)",
             "",
             "Step-by-step transformations executed within the `let ... in` block:",
             "",
@@ -280,9 +280,9 @@ class ExpressionDocBuilder:
         return "\n".join(lines)
 
     def _build_m_code_chapter(self) -> str:
-        """Chapter 5: Full M Expression."""
+        """Full M Expression."""
         lines = [
-            "## 5. Full Power Query M Expression",
+            "## Full Power Query M Expression",
             "",
             "```powerquery",
             self.full_m.strip(),
@@ -291,9 +291,9 @@ class ExpressionDocBuilder:
         return "\n".join(lines)
 
     def _build_rag_hints_chapter(self) -> str:
-        """Chapter 6: RAG Semantic Retrieval Context."""
+        """RAG Semantic Retrieval Context."""
         lines = [
-            "## 6. Semantic Context for AI & RAG",
+            "## Semantic Context for AI & RAG",
             "",
             "Synthesized context for semantic vector search and AI assistants:",
             "",

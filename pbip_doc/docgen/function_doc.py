@@ -100,14 +100,14 @@ class FunctionDocBuilder:
         return format_yaml_frontmatter(frontmatter_data)
 
     def _build_identity_chapter(self) -> str:
-        """Chapter 1: Function Identity & Business Purpose."""
+        """Function Identity & Business Purpose."""
         sig_display = f"`{self.name}{self.signature}`"
         lines = [
             f"# Function: `{self.name}`",
             "",
             f"**Signature**: {sig_display} | **Return Type**: `{self.return_type}` | **Downstream Dependent Measures**: `{len(self.downstream_measures)}`",
             "",
-            "## 1. Business Description & Purpose",
+            "## Business Description & Purpose",
         ]
 
         if self.description:
@@ -122,9 +122,9 @@ class FunctionDocBuilder:
         return "\n".join(lines)
 
     def _build_parameters_chapter(self) -> str:
-        """Chapter 2: Parameters & Arguments Specification."""
+        """Parameters & Arguments Specification."""
         lines = [
-            f"## 2. Parameters & Arguments ({len(self.parameters)} parameters)",
+            f"## Parameters & Arguments ({len(self.parameters)} parameters)",
             "",
             "| Parameter | Data Type | Optional | Default Value | Description |",
             "| :--- | :---: | :---: | :--- | :--- |",
@@ -141,9 +141,9 @@ class FunctionDocBuilder:
         return "\n".join(lines)
 
     def _build_formula_chapter(self) -> str:
-        """Chapter 3: Implementation Formula."""
+        """Implementation Formula."""
         lines = [
-            "## 3. Implementation Formula",
+            "## Implementation Formula",
             "```dax",
             f"function {self.name} = {self.signature} =>",
         ]
@@ -155,9 +155,9 @@ class FunctionDocBuilder:
         return "\n".join(lines)
 
     def _build_downstream_chapter(self) -> str:
-        """Chapter 4: Downstream Impact Analysis (Where Used)."""
+        """Downstream Impact Analysis (Where Used)."""
         lines = [
-            "## 4. Downstream Impact Analysis (Where Used)",
+            "## Downstream Impact Analysis (Where Used)",
             "",
         ]
 
@@ -204,9 +204,9 @@ class FunctionDocBuilder:
         return "\n".join(lines)
 
     def _build_upstream_chapter(self) -> str:
-        """Chapter 5: Upstream Dependencies & Referenced Objects."""
+        """Upstream Dependencies & Referenced Objects."""
         lines = [
-            "## 5. Upstream Dependencies & Referenced Model Objects",
+            "## Upstream Dependencies & Referenced Model Objects",
             "",
         ]
 
@@ -238,10 +238,10 @@ class FunctionDocBuilder:
         return "\n".join(lines)
 
     def _build_rag_hints_chapter(self) -> str:
-        """Chapter 6: Semantic Context for AI & RAG."""
+        """Semantic Context for AI & RAG."""
         param_desc = ", ".join(f"`{p.get('name')}`" for p in self.parameters) or "No parameters"
         lines = [
-            "## 6. Semantic Context for AI & RAG",
+            "## Semantic Context for AI & RAG",
             "",
             "Semantic retrieval guidance for AI assistants and Vector Search engines:",
             "",

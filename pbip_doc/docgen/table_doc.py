@@ -4,6 +4,7 @@ Optimized for dual consumption: human readability + AI RAG semantic search.
 Vanilla Python implementation.
 """
 
+import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename
@@ -127,13 +128,13 @@ class TableDocBuilder:
         return format_yaml_frontmatter(frontmatter_data)
 
     def _build_semantic_overview_chapter(self) -> str:
-        """Chapter 1: Semantic Overview & Business Purpose."""
+        """Semantic Overview & Business Purpose."""
         lines = [
             f"# Table: `{self.name}`",
             "",
             f"**Architectural Role**: `{self.role}` | **Source**: `{self.table.get('source_type', 'PowerQuery')}` | **Columns**: `{len(self.columns)}` | **Associated Measures**: `{len(self.measures)}`",
             "",
-            "## 1. Semantic Overview & Business Purpose",
+            "## Semantic Overview & Business Purpose",
         ]
 
         if self.table.get("description"):
@@ -187,8 +188,8 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_topology_chapter(self) -> str:
-        """Chapter 2: Star Schema, Snowflake Outriggers & Relationships."""
-        lines = ["## 2. Model Topology & Relationships"]
+        """Star Schema, Snowflake Outriggers & Relationships."""
+        lines = ["## Model Topology & Relationships"]
 
         # Connected Dimensions (if Fact) - filtered for excluded tables
         connected_dims = [
@@ -270,10 +271,10 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_lineage_chapter(self) -> str:
-        """Chapter 3: Power Query (M) Lineage & Upstream Connectors or DAX Table Calculation."""
+        """Power Query (M) Lineage & Upstream Connectors or DAX Table Calculation."""
         if self.table.get("source_type") == "CalculatedTable":
             lines = [
-                "## 3. DAX Table Expression & Lineage",
+                "## DAX Table Expression & Lineage",
                 "",
                 "This table is dynamically computed in-memory within the semantic model using DAX, rather than loaded from an external Power Query data source.",
             ]
@@ -318,7 +319,7 @@ class TableDocBuilder:
             return "\n".join(lines)
 
         lines = [
-            "## 3. Power Query Lineage & Physical Sources",
+            "## Power Query Lineage & Physical Sources",
             "",
             "This section traces data lineage from the original physical data source to table ingestion.",
         ]
@@ -376,11 +377,11 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_incremental_refresh_chapter(self) -> str:
-        """Chapter 4: Incremental Refresh Policy configuration and details."""
+        """Incremental Refresh Policy configuration and details."""
         policy = self.table.get("incremental_refresh_policy")
         is_enabled = bool(policy and policy.get("is_enabled"))
 
-        lines = ["## 4. Incremental Refresh Policy", ""]
+        lines = ["## Incremental Refresh Policy", ""]
 
         if not is_enabled:
             if self.table.get("source_type") == "CalculatedTable":
@@ -457,9 +458,9 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_columns_chapter(self) -> str:
-        """Chapter 5: Data Dictionary of Table Columns & Calculated Columns."""
+        """Data Dictionary of Table Columns & Calculated Columns."""
         lines = [
-            f"## 5. Columns Data Dictionary ({len(self.columns)} fields)",
+            f"## Columns Data Dictionary ({len(self.columns)} fields)",
             "",
             "| Column Name | Data Type | Type / Origin | Format | Description |",
             "| :--- | :--- | :---: | :--- | :--- |",
@@ -530,9 +531,9 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_measures_chapter(self) -> str:
-        """Chapter 6: Measures residing in this table."""
+        """Measures residing in this table."""
         lines = [
-            f"## 6. Associated DAX Measures ({len(self.measures)})",
+            f"## Associated DAX Measures ({len(self.measures)})",
             "",
             "The following calculated measures are defined within this table:",
             "",
@@ -563,14 +564,14 @@ class TableDocBuilder:
         return "\n".join(lines)
 
     def _build_rag_hints_chapter(self) -> str:
-        """Chapter 7: RAG Semantic Retrieval Context & Natural Language QA."""
+        """RAG Semantic Retrieval Context & Natural Language QA."""
         col_names = [f"`{c.get('name')}`" for c in self.columns[:10]]
         sample_cols = ", ".join(col_names)
         if len(self.columns) > 10:
             sample_cols += f" and {len(self.columns) - 10} other columns"
 
         lines = [
-            "## 7. Semantic Context for AI & RAG",
+            "## Semantic Context for AI & RAG",
             "",
             "Synthesized context for semantic vector retrieval and AI search assistants:",
             "",
@@ -580,14 +581,6 @@ class TableDocBuilder:
 
         if self.table.get("source_type") == "CalculatedTable":
             lines.append("- **Computation Type**: In-memory DAX Calculated Table (`partition = calculated`).")
-            if self.table.get("expression"):
-                first_line = next(
-                    (line.strip() for line in self.table.get("expression", "").splitlines() if line.strip()),
-                    ""
-                )
-                if first_line:
-                    clean_first_line = first_line.replace("`", "'")
-                    lines.append(f"- **DAX Table Definition**: `{clean_first_line}`")
 
         if self.role == "FACT":
             lines.extend([

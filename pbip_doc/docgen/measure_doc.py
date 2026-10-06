@@ -4,6 +4,7 @@ Optimized for dual consumption: human readability + AI RAG semantic search.
 Vanilla Python implementation.
 """
 
+import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename
@@ -157,7 +158,7 @@ class MeasureDocBuilder:
 
         lines.extend([
             "",
-            "## 1. Business Description & Purpose",
+            "## Business Description & Purpose",
         ])
 
         if self.description:
@@ -182,21 +183,21 @@ class MeasureDocBuilder:
         return "\n".join(lines)
 
     def _build_dax_chapter(self) -> str:
-        """Chapter 2: DAX Expression."""
+        """DAX Expression."""
         dax_clean = self.dax.strip() if self.dax else "-- No DAX expression provided"
         if dax_clean.startswith("```"):
             dax_clean = re.sub(r'^```[a-zA-Z]*\r?\n?', '', dax_clean)
             dax_clean = re.sub(r'\r?\n?\s*```\s*$', '', dax_clean).strip()
         return "\n".join([
-            "## 2. DAX Formula",
+            "## DAX Formula",
             "```dax",
             dax_clean,
             "```",
         ])
 
     def _build_upstream_chapter(self) -> str:
-        """Chapter 3: Upstream Calculation Tree (Dependencies)."""
-        lines = ["## 3. Upstream Calculation Tree (Direct and Transitive Dependencies)"]
+        """Upstream Calculation Tree (Dependencies)."""
+        lines = ["## Upstream Calculation Tree (Direct and Transitive Dependencies)"]
 
         if not self.direct_deps:
             lines.append(
@@ -239,9 +240,9 @@ class MeasureDocBuilder:
         return "\n".join(lines)
 
     def _build_downstream_chapter(self) -> str:
-        """Chapter 4: Downstream Impact Analysis (Where Used)."""
+        """Downstream Impact Analysis (Where Used)."""
         lines = [
-            "## 4. Downstream Impact Analysis (Where Used)",
+            "## Downstream Impact Analysis (Where Used)",
             "",
         ]
 
@@ -263,8 +264,8 @@ class MeasureDocBuilder:
         return "\n".join(lines)
 
     def _build_columns_chapter(self) -> str:
-        """Chapter 5: Referenced Physical Columns & Tables."""
-        lines = ["## 5. Referenced Physical Columns & Tables"]
+        """Referenced Physical Columns & Tables."""
+        lines = ["## Referenced Physical Columns & Tables"]
 
         if self.referenced_cols:
             lines.append("The DAX formula directly accesses the following fields from the data model:")
@@ -286,9 +287,9 @@ class MeasureDocBuilder:
         return "\n".join(lines)
 
     def _build_rag_hints_chapter(self) -> str:
-        """Chapter 6: RAG Semantic Context & Business Questions."""
+        """RAG Semantic Context & Business Questions."""
         lines = [
-            "## 6. Semantic Context for AI & RAG",
+            "## Semantic Context for AI & RAG",
             "",
             "Semantic retrieval guidance for AI assistants and Vector Search engines:",
             "",

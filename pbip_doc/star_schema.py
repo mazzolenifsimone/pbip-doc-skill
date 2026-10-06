@@ -14,7 +14,7 @@ Vanilla Python implementation.
 """
 
 import re
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Dict, List, Set, Tuple, Optional, Any, Callable
 from .model_schema import (
     TableDefinition,
     ColumnDefinition,
@@ -42,10 +42,36 @@ class StarSchemaResolver:
         self,
         tables: List[TableDefinition],
         relationships: List[RelationshipDefinition],
+        is_table_excluded_fn: Optional[Callable[[str], bool]] = None,
     ):
+        if is_table_excluded_fn is None:
+            from .docgen.config import DocGenConfig
+            is_table_excluded_fn = DocGenConfig().is_table_excluded
+
+        self._is_table_excluded_fn = is_table_excluded_fn
         self.tables_map: Dict[str, TableDefinition] = {t.name: t for t in tables}
-        self.relationships = [r for r in relationships if r.is_active]  # active primary relationships
-        self.all_relationships = relationships
+
+        # Filter out relationships involving tables excluded by configuration (DocGenConfig).
+        # NOTE: Tables marked with out_of_scope == True are NOT excluded from the semantic topology
+        # (out_of_scope is solely used by document generators to determine publication of Markdown files).
+        in_perimeter_rels: List[RelationshipDefinition] = []
+        for r in relationships:
+            if self._is_table_excluded(r.from_table) or self._is_table_excluded(r.to_table):
+                continue
+            # Ensure both endpoint tables exist in the model's active table map
+            if r.from_table not in self.tables_map or r.to_table not in self.tables_map:
+                continue
+            in_perimeter_rels.append(r)
+
+        self.relationships = [r for r in in_perimeter_rels if r.is_active]  # active primary relationships
+        self.all_relationships = in_perimeter_rels
+
+        # Pre-index relationship columns by table (case-insensitive) for fast topological key resolution
+        self.relationship_columns: Dict[str, Set[str]] = {}
+        for r in self.all_relationships:
+            self.relationship_columns.setdefault(r.from_table.lower(), set()).add(r.from_column.lower())
+            self.relationship_columns.setdefault(r.to_table.lower(), set()).add(r.to_column.lower())
+
         self.fact_tables: List[str] = []
         self.dim_tables: List[str] = []
         self.lookup_tables: List[str] = []
@@ -53,9 +79,35 @@ class StarSchemaResolver:
         self.date_tables: List[str] = []
         self.utility_tables: List[str] = []
 
-    def _is_key_column(self, col: ColumnDefinition) -> bool:
+    def _is_table_excluded(self, table_name: Optional[str]) -> bool:
+        """
+        Determines whether a table is excluded according to the active configuration (DocGenConfig).
+        Tables with out_of_scope == True are preserved in topology and are NOT considered excluded.
+        """
+        if not table_name:
+            return True
+        return bool(self._is_table_excluded_fn(table_name.strip()))
+
+    def _is_key_column(self, col: ColumnDefinition, table_name: Optional[str] = None) -> bool:
+        """
+        Evaluates whether a column is a key column using a hybrid 3-tier hierarchy:
+        1. Topological Criterion (Ground Truth): participates in an in-perimeter relationship
+           (active or inactive, e.g. role-playing dimensions) involving this table.
+        2. Declarative Criterion: explicit TMDL/TMSL metadata flag (col.is_key == True).
+        3. Semantic/Heuristic Fallback: naming patterns (ends with id/key or matches code/uuid/sk),
+           essential for degenerate dimensions / transaction IDs lacking relational edges.
+        """
+        # Tier 1: Topological relationship check
+        if table_name:
+            rel_cols = self.relationship_columns.get(table_name.lower(), set())
+            if col.name.lower() in rel_cols:
+                return True
+
+        # Tier 2: Explicit metadata flag
         if col.is_key:
             return True
+
+        # Tier 3: Semantic fallback
         name_l = col.name.lower()
         if name_l.endswith(("key", "id", "_id", "_key", "code", "cd")):
             return True
@@ -63,12 +115,12 @@ class StarSchemaResolver:
             return True
         return False
 
-    def _is_metric_column(self, col: ColumnDefinition) -> bool:
+    def _is_metric_column(self, col: ColumnDefinition, table_name: Optional[str] = None) -> bool:
         name_l = col.name.lower()
         type_l = col.data_type.lower()
         if type_l not in ("int64", "decimal", "double", "currency", "integer", "number", "float"):
             return False
-        if self._is_key_column(col):
+        if self._is_key_column(col, table_name):
             return False
         if name_l in ("year", "month", "day", "quarter", "week", "datekey", "sort", "order", "index", "flag", "status", "version"):
             return False
@@ -82,10 +134,10 @@ class StarSchemaResolver:
         col_count = len(table.columns)
         if col_count == 0:
             return False
-        metric_cols = [c for c in table.columns if self._is_metric_column(c)]
+        metric_cols = [c for c in table.columns if self._is_metric_column(c, table.name)]
         if len(metric_cols) > 0:
             return False
-        key_cols = [c for c in table.columns if self._is_key_column(c)]
+        key_cols = [c for c in table.columns if self._is_key_column(c, table.name)]
         # Allow up to 4 columns, e.g. (sk, id, valid_from, valid_to) or (dim1_id, dim2_id)
         if col_count <= 4 and len(key_cols) >= max(1, col_count - 2):
             return True
@@ -324,7 +376,7 @@ class StarSchemaResolver:
             many_count = len(outgoing_many_rels[name])
             one_count = len(incoming_one_rels[name])
 
-            metric_cols = [c for c in table.columns if self._is_metric_column(c)]
+            metric_cols = [c for c in table.columns if self._is_metric_column(c, table.name)]
             text_cols = [c for c in table.columns if c.data_type.lower() in ("string", "text", "varchar")]
 
             fact_score = 0.0
