@@ -8,6 +8,8 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
+
 from .parser import PBIPParser
 from .docgen import DocGenConfig, MarkdownDocGenerator
 
