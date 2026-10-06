@@ -1,8 +1,15 @@
-# pbip-doc-skill (Pure Python)
+# pbip-doc-skill
 
 > **Documentation and semantic dependency resolution engine for Microsoft Fabric and Power BI Project (`.pbip`) semantic models.**
 
-This repository provides an open-source tool to parse, analyze, and extract an enriched graph of metadata from Power BI semantic models in **PBIP** format (supporting both **TMDL** folder structure `definition/` and **TMSL** `model.bim` files).
+Hi, a human's writing here.
+Would you like a simple tool that document a whole semantic model of a TMDL based (.pbip) or TMSL based (.bim) Power BI project? Me too, a lot. Then I vibed (of course I vibed it) something I find pretty useful.
+
+This tool runs on a very *simple* python code without any dependencies. This tool has a double soul: first to provide a structured way to retrieve foundamental information from a pbip file in a json format that can be used as RAG knowledge base (very practical for our cy-friends), second to document them in a modular-structured markdown format that can be personalized with a practial json configuration file for human-ready documentation.
+
+This tool is structured as an agentic skill with SKILL.md file and MCP Server and A LOT of documentation structured in a practical way for your little cy-workers (YAML frontmatter, TL;DR chapters, FAQ's).
+
+Hope it helps. And now I'll leave you (or your cy-bros) to read all the following AI slop (still very usefull though - for me atleast).
 
 ---
 
