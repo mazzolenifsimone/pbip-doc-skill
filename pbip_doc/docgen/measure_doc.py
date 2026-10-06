@@ -183,10 +183,14 @@ class MeasureDocBuilder:
 
     def _build_dax_chapter(self) -> str:
         """Chapter 2: DAX Expression."""
+        dax_clean = self.dax.strip() if self.dax else "-- No DAX expression provided"
+        if dax_clean.startswith("```"):
+            dax_clean = re.sub(r'^```[a-zA-Z]*\r?\n?', '', dax_clean)
+            dax_clean = re.sub(r'\r?\n?\s*```\s*$', '', dax_clean).strip()
         return "\n".join([
             "## 2. DAX Formula",
             "```dax",
-            self.dax.strip() if self.dax else "-- No DAX expression provided",
+            dax_clean,
             "```",
         ])
 

@@ -282,7 +282,11 @@ class TableDocBuilder:
                 lines.append("")
                 lines.append("### DAX Table Formula:")
                 lines.append("```dax")
-                lines.append(calc_expr.strip())
+                clean_calc_expr = calc_expr.strip()
+                if clean_calc_expr.startswith("```"):
+                    clean_calc_expr = re.sub(r'^```[a-zA-Z]*\r?\n?', '', clean_calc_expr)
+                    clean_calc_expr = re.sub(r'\r?\n?\s*```\s*$', '', clean_calc_expr).strip()
+                lines.append(clean_calc_expr)
                 lines.append("```")
             else:
                 lines.append("")
@@ -508,6 +512,9 @@ class TableDocBuilder:
                 c_desc = cc.get("description")
                 c_expr = cc.get("expression") or ""
                 c_expr_clean = c_expr.strip() if c_expr else "/* No formula available */"
+                if c_expr_clean.startswith("```"):
+                    c_expr_clean = re.sub(r'^```[a-zA-Z]*\r?\n?', '', c_expr_clean)
+                    c_expr_clean = re.sub(r'\r?\n?\s*```\s*$', '', c_expr_clean).strip()
 
                 lines.append(f"#### Calculated Column: `{c_name}`")
                 lines.append(f"- **Data Type**: `{c_type}`")
@@ -574,8 +581,13 @@ class TableDocBuilder:
         if self.table.get("source_type") == "CalculatedTable":
             lines.append("- **Computation Type**: In-memory DAX Calculated Table (`partition = calculated`).")
             if self.table.get("expression"):
-                expr_summary = self.table.get("expression").strip().split('\n')[0]
-                lines.append(f"- **DAX Table Definition**: `{expr_summary}`")
+                first_line = next(
+                    (line.strip() for line in self.table.get("expression", "").splitlines() if line.strip()),
+                    ""
+                )
+                if first_line:
+                    clean_first_line = first_line.replace("`", "'")
+                    lines.append(f"- **DAX Table Definition**: `{clean_first_line}`")
 
         if self.role == "FACT":
             lines.extend([

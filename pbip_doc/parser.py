@@ -31,15 +31,27 @@ from .measure_analyzer import MeasureDependencyResolver
 
 
 def _clean_tmdl_multiline_block(expr: Optional[str]) -> Optional[str]:
-    """Strips TMDL triple backticks (``` or ```dax / ```m) from multiline code blocks."""
+    """Strips TMDL triple backticks (``` or ```dax / ```m) from multiline code blocks and dedents."""
     if not expr:
         return expr
     s = expr.strip()
     if s.startswith("```"):
-        s = re.sub(r'^```[a-zA-Z]*\r?\n?', '', s)
-        s = re.sub(r'\r?\n?\s*```$', '', s)
-        s = s.strip()
-    return s
+        s = re.sub(r'^```(?:(?:dax|m)\b)?[^\S\r\n]*\r?\n?', '', s, flags=re.IGNORECASE)
+    if s.endswith("```"):
+        s = re.sub(r'\r?\n?\s*```\s*$', '', s)
+    return textwrap.dedent(s).strip()
+
+
+def _clean_tmdl_description(desc: Optional[str]) -> Optional[str]:
+    """Cleans a TMDL description, stripping quotes, triple backticks, and extra whitespace."""
+    if not desc:
+        return None
+    d = desc.strip()
+    if d.startswith("```") and d.endswith("```"):
+        d = d[3:-3].strip()
+    elif (d.startswith('"') and d.endswith('"')) or (d.startswith("'") and d.endswith("'")):
+        d = d[1:-1].strip()
+    return d if d else None
 
 
 class PBIPParser:
@@ -506,8 +518,13 @@ class PBIPParser:
                 continue
 
             # Extract properties before cleaning them
-            desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', block, re.MULTILINE)
-            description = desc_match.group(1).strip() if desc_match else None
+            desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', block)
+            if desc_m:
+                description = desc_m.group("mdesc").strip()
+            else:
+                desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', block, re.MULTILINE)
+                description = desc_match.group(1).strip() if desc_match else None
+            description = _clean_tmdl_description(description)
 
             tag_match = re.search(r'lineageTag:\s*([^\r\n]+)', block)
             lineage_tag = tag_match.group(1).strip() if tag_match else None
@@ -548,7 +565,17 @@ class PBIPParser:
                 source_type = "CalculatedTable"
                 header_expr = t_match.group(4).strip()
                 if header_expr:
-                    table_expression = header_expr
+                    table_expression = _clean_tmdl_multiline_block(header_expr)
+
+        # Extract table-level description (before any column, measure, partition, hierarchy)
+        table_header_block = re.split(r'\n\s{1,4}(?:column|measure|partition|hierarchy)\b', content, maxsplit=1)[0]
+        tbl_desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', table_header_block)
+        if tbl_desc_m:
+            description = tbl_desc_m.group("mdesc").strip()
+        else:
+            tbl_desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', table_header_block, re.MULTILINE)
+            description = tbl_desc_match.group(1).strip() if tbl_desc_match else None
+        description = _clean_tmdl_description(description)
 
         columns: List[ColumnDefinition] = []
         measures: List[MeasureDefinition] = []
@@ -583,6 +610,7 @@ class PBIPParser:
             table_m_code = m_partition_match.group(1).strip()
             # Stop before annotations or next major block
             table_m_code = re.split(r'\n\s*(?:annotation|lineageTag)\b', table_m_code)[0]
+            table_m_code = _clean_tmdl_multiline_block(table_m_code) or ""
             source_type = "PowerQuery"
         elif calc_partition_match or re.search(r'partition\b.*=\s*calculated\b', content, re.IGNORECASE):
             source_type = "CalculatedTable"
@@ -592,13 +620,13 @@ class PBIPParser:
                 if src_m:
                     expr_raw = src_m.group(1).strip()
                     expr_raw = re.split(r'\n\s*(?:annotation|lineageTag)\b', expr_raw)[0].strip()
-                    table_expression = textwrap.dedent(expr_raw).strip()
+                    table_expression = _clean_tmdl_multiline_block(expr_raw)
             if not table_expression:
                 fb_m = re.search(r'partition\b.*=\s*calculated\b.*?source\s*=\s*(.*)', content, re.DOTALL | re.IGNORECASE)
                 if fb_m:
                     expr_raw = fb_m.group(1).strip()
                     expr_raw = re.split(r'\n\s*(?:annotation|lineageTag|column|measure|partition|hierarchy)\b', expr_raw)[0].strip()
-                    table_expression = textwrap.dedent(expr_raw).strip()
+                    table_expression = _clean_tmdl_multiline_block(expr_raw)
 
         # Extract Columns
         # Handles both regular columns:
@@ -643,14 +671,19 @@ class PBIPParser:
             format_string = fmt_match.group(1).strip() if fmt_match else None
             is_col_hidden = "isHidden" in body
             is_key = "isKey" in body
-            desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
-            c_desc = desc_match.group(1).strip() if desc_match else None
+            desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', body)
+            if desc_m:
+                c_desc = desc_m.group("mdesc").strip()
+            else:
+                desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
+                c_desc = desc_match.group(1).strip() if desc_match else None
+            c_desc = _clean_tmdl_description(c_desc)
 
             # Fallback for explicit expression: attribute if present
             if not c_expr:
                 expr_match = re.search(r'expression:\s*(.+)', body)
                 if expr_match:
-                    c_expr = expr_match.group(1).strip()
+                    c_expr = _clean_tmdl_multiline_block(expr_match.group(1).strip())
                     is_calculated = True
 
             columns.append(
@@ -682,8 +715,13 @@ class PBIPParser:
 
             fmt_match = re.search(r'formatString:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
             format_string = fmt_match.group(1).strip() if fmt_match else None
-            desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
-            m_desc = desc_match.group(1).strip() if desc_match else None
+            desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', m_body_and_props)
+            if desc_m:
+                m_desc = desc_m.group("mdesc").strip()
+            else:
+                desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
+                m_desc = desc_match.group(1).strip() if desc_match else None
+            m_desc = _clean_tmdl_description(m_desc)
             folder_match = re.search(r'displayFolder:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
             m_folder = folder_match.group(1).strip() if folder_match else None
             m_hidden = "isHidden" in m_body_and_props
@@ -932,8 +970,8 @@ class PBIPParser:
             )
             description = None
             if desc_match:
-                description = desc_match.group(1) or desc_match.group(2) or desc_match.group(3)
-                description = description.strip() if description else None
+                raw_desc = desc_match.group(1) or desc_match.group(2) or desc_match.group(3)
+                description = _clean_tmdl_description(raw_desc)
             elif not backtick_match:
                 dm = re.search(
                     r'^\s{1,8}description:\s*(?:"([^"]*)"|\'([^\']*)\'|([^\r\n]+))',
@@ -941,8 +979,8 @@ class PBIPParser:
                     re.MULTILINE
                 )
                 if dm:
-                    description = dm.group(1) or dm.group(2) or dm.group(3)
-                    description = description.strip() if description else None
+                    raw_desc = dm.group(1) or dm.group(2) or dm.group(3)
+                    description = _clean_tmdl_description(raw_desc)
 
             type_match = re.search(r'^\s{0,8}dataType:\s*([^\r\n]+)', meta_block, re.MULTILINE)
             return_type = type_match.group(1).strip() if type_match else None

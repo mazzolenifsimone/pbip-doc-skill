@@ -1665,6 +1665,57 @@ class TestCalculatedTables(unittest.TestCase):
         self.assertIn("CALENDAR(DATE(2020, 1, 1), DATE(2025, 12, 31))", tbl_doc)
         self.assertIn("In-Memory Calculated Table", tbl_doc)
 
+    def test_parse_tmdl_calculated_partition_with_triple_backticks(self):
+        """Verifies that triple backticks enclosing TMDL calculated table expressions are stripped cleanly."""
+        tmdl_content = """table 'Date Table'
+\tdescription: ```
+\tCalendar table generated dynamically
+\t```
+
+\tcolumn Date
+\t\tdataType: dateTime
+\t\tdescription: "Calendar date"
+
+\tpartition 'Date Table' = calculated
+\t\tmode: import
+\t\tsource = ```
+\t\t\t\tVAR StartDate = DATE(2020, 1, 1)
+\t\t\t\tVAR EndDate = DATE(2025, 12, 31)
+\t\t\t\tRETURN
+\t\t\t\t    CALENDAR(StartDate, EndDate)
+\t\t\t\t```
+
+\t\tannotation SummarizationSetBy = Automatic
+"""
+        parser = PBIPParser()
+        table_def, _, _ = parser._parse_single_table_tmdl(tmdl_content, "Date Table")
+        self.assertEqual(table_def.source_type, "CalculatedTable")
+        self.assertNotIn("```", table_def.expression)
+        self.assertTrue(table_def.expression.startswith("VAR StartDate ="))
+        self.assertIn("CALENDAR(StartDate, EndDate)", table_def.expression)
+        self.assertEqual(table_def.description, "Calendar table generated dynamically")
+        self.assertEqual(table_def.columns[0].description, "Calendar date")
+
+        # Test TableDocBuilder output does not contain broken code blocks
+        from pbip_doc.docgen.table_doc import TableDocBuilder
+        from pbip_doc.docgen.config import DocGenConfig
+
+        tbl_data = {
+            "name": table_def.name,
+            "role": "DATE_DIMENSION",
+            "source_type": table_def.source_type,
+            "expression": table_def.expression,
+            "columns": [{"name": "Date", "data_type": "dateTime", "description": "Calendar date"}],
+            "measures": [],
+            "connected_facts": [],
+            "connected_dimensions": [],
+            "active_relationships": [],
+        }
+        md = TableDocBuilder(tbl_data, {"tables": [tbl_data], "measures": []}, DocGenConfig()).build_markdown()
+        self.assertNotIn("```dax\n```", md)
+        self.assertNotIn("````", md)
+        self.assertIn("- **DAX Table Definition**: `VAR StartDate = DATE(2020, 1, 1)`", md)
+
 
 if __name__ == "__main__":
     unittest.main()
