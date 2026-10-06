@@ -13,6 +13,7 @@ dist/
 venv/
 ENV/
 env/
+.vscode/
 
 # Logs and temporary files
 *.log
