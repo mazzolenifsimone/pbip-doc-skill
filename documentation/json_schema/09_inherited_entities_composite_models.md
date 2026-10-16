@@ -33,7 +33,8 @@ In organizations using a central *Golden Dataset*, downstream reports (*thin rep
 |---|---|---|---|
 | `is_inherited` | `boolean` | No | `true` if the table is inherited via an `entity` partition. |
 | `inherited_entity_name` | `string` | Yes | Entity name in the remote source model. |
-| `inherited_expression_source`| `string` | Yes | Remote source or connector name (e.g. `"DatabaseQuery"`). |
+| `inherited_expression_source`| `string` | Yes | Remote source or connector expression name (e.g. `"DirectQuery to AS - AdventureWorks"`). |
+| `inherited_model_name` | `string` | Yes | Resolved original semantic model name (e.g. `"AdventureWorks"`), parsed from the underlying connection. |
 | `out_of_scope` | `boolean` | No | `true` if excluded from standalone document generation (`include_inherited_entities: false`). |
 
 ### 2. On Measures (`MeasureDefinition`)
@@ -42,29 +43,29 @@ In organizations using a central *Golden Dataset*, downstream reports (*thin rep
 |---|---|---|---|
 | `is_inherited` | `boolean` | No | `true` if the measure comes from the central model (`is_external_measure == true`). |
 | `is_external_measure` | `boolean` | No | `true` if the DAX formula calls `EXTERNALMEASURE(...)`. |
+| `inherited_model_name` | `string` | Yes | Resolved original semantic model name (e.g. `"AdventureWorks"`). |
 | `out_of_scope` | `boolean` | No | `true` if the external measure should not produce a standalone Markdown file. |
 
 ---
 
 ## 🔍 Extraction & Detection Logic
 
-### 1. Inherited Tables (`partition = entity`)
+### 1. Inherited Tables (`partition = entity`) & DirectQuery to Analysis Services
 - **TMDL (`tables/<TableName>.tmdl`)**:
   ```text
   partition Customer = entity
       mode: directQuery
       source
           entityName: DimCustomer
-          expressionSource: CentralDataModel
+          expressionSource: 'DirectQuery to AS - AdventureWorks'
   ```
   - Detects `partition ... = entity`.
   - Sets `source_type = "InheritedEntity"`.
   - Sets `is_inherited = true`.
   - Reads `entityName` into `inherited_entity_name`.
   - Reads `expressionSource` into `inherited_expression_source`.
-  - Creates a synthetic `PowerQuerySource`:
-    - `source_type = "INHERITED_ENTITY"`
-    - `connection_string = "Entity: DimCustomer (Source: CentralDataModel)"`
+  - Resolves `inherited_model_name` by looking up the underlying expression query (e.g. `AnalysisServices.Database("powerbi://...", "AdventureWorks")`) or parsing `"AdventureWorks"` from `"DirectQuery to AS - AdventureWorks"`.
+  - Registers the remote Analysis Services / Power BI Semantic Model in `data_sources_summary` so it appears in `INDEX.md` under **Detected Physical Data Sources**.
 - **TMSL (`model.bim`)**:
   - Matches `"type": "entity"` or the presence of `"entityName"` in partitions.
 
@@ -158,10 +159,11 @@ When documenting composite models or thin reports, you can link inherited entiti
 
 ### 2. Resolution Behavior
 - **Configured Path**:
-  - Inherited table `Customer` (source: `CentralDataModel`):
-    `https://docs.company.internal/bi/CentralDataModel/tables/DimCustomer.md`
-  - External measure `[Total Sales]` (source: `CentralDataModel`):
-    `https://docs.company.internal/bi/CentralDataModel/measures/Customer/Total_Sales.md`
+  - Inherited table `Customer` (expression: `'DirectQuery to AS - AdventureWorks'` -> model: `AdventureWorks`):
+    `https://docs.company.internal/bi/models/AdventureWorks/tables/DimCustomer.md`
+  - External measure `[Total Sales]` (source: `AdventureWorks`):
+    `https://docs.company.internal/bi/models/AdventureWorks/measures/DimCustomer/Total_Sales.md`
+  - *Note*: The engine automatically extracts and uses the original remote model name (`AdventureWorks`), never the raw M expression name (`DirectQuery to AS - AdventureWorks`).
 - **Unconfigured**:
   - Safely falls back to non-linked badge (`*(Inherited Entity)*`, `*(External Measure)*`) to avoid generating broken links.
 

@@ -27,6 +27,11 @@ class MLineageResolver:
         (r'\bSnowflake\.Databases\s*\(\s*["\']([^"\']+)["\']\s*,\s*["\']([^"\']+)["\']', "SNOWFLAKE", "server_db"),
         (r'\bGoogleBigQuery\.Database\s*\(', "BIGQUERY", "generic"),
         
+        # Analysis Services / Power BI Semantic Models
+        (r'\bAnalysisServices\.Database\s*\(\s*["\']([^"\']+)["\']\s*,\s*["\']([^"\']+)["\']', "ANALYSIS_SERVICES", "server_db"),
+        (r'\bAnalysisServices\.Databases\s*\(\s*["\']([^"\']+)["\']\s*\)\s*\{[^}]*\[(?:Name|Item)\s*=\s*["\']([^"\']+)["\']', "ANALYSIS_SERVICES", "server_db"),
+        (r'\bAnalysisServices\.Databases\s*\(\s*["\']([^"\']+)["\']', "ANALYSIS_SERVICES", "server_only"),
+
         # Files & Storage
         (r'\bExcel\.Workbook\s*\(\s*File\.Contents\s*\(\s*["\']([^"\']+)["\']', "EXCEL_FILE", "filepath"),
         (r'\bCsv\.Document\s*\(\s*File\.Contents\s*\(\s*["\']([^"\']+)["\']', "CSV_FILE", "filepath"),
@@ -110,6 +115,8 @@ class MLineageResolver:
             return f"server_db:{s.server.strip().lower()} / {s.database.strip().lower()}"
         if s.server:
             return f"server:{s.server.strip().lower()}"
+        if s.database:
+            return f"db:{s.database.strip().lower()}"
         if s.connection_string:
             return f"conn:{cls._endpoint_key(s.connection_string)}"
         return f"{s.source_type}:{s.raw_snippet or ''}"
@@ -124,6 +131,8 @@ class MLineageResolver:
             existing = sources_dict[key]
             if existing.source_type == "LOCAL_FILE" and s.source_type in ("EXCEL_FILE", "CSV_FILE"):
                 sources_dict[key] = s
+            elif existing.source_type == "INHERITED_ENTITY" and s.source_type in ("ANALYSIS_SERVICES", "POWERBI_SEMANTIC_MODEL"):
+                sources_dict[key] = s
 
     def _extract_sources(self, m_code: str) -> List[PowerQuerySource]:
         """Scans M code for connector source calls, keeping the most specific connector per endpoint."""
@@ -136,6 +145,9 @@ class MLineageResolver:
                 if mode == "server_db":
                     server = match.group(1)
                     db = match.group(2)
+                    stype = source_type
+                    if source_type == "ANALYSIS_SERVICES" and any(pbi in server.lower() for pbi in ("powerbi://", "api.powerbi.com", "pbiazure://")):
+                        stype = "POWERBI_SEMANTIC_MODEL"
                     ep_key = f"server_db:{server.strip().lower()} / {db.strip().lower()}"
                     if ep_key in seen_endpoints:
                         continue
@@ -143,7 +155,7 @@ class MLineageResolver:
                     seen_endpoints.add(f"server:{server.strip().lower()}")
                     sources.append(
                         PowerQuerySource(
-                            source_type=source_type,
+                            source_type=stype,
                             connection_string=f"{server} / {db}",
                             server=server,
                             database=db,
@@ -152,13 +164,16 @@ class MLineageResolver:
                     )
                 elif mode == "server_only":
                     server = match.group(1)
+                    stype = source_type
+                    if source_type == "ANALYSIS_SERVICES" and any(pbi in server.lower() for pbi in ("powerbi://", "api.powerbi.com", "pbiazure://")):
+                        stype = "POWERBI_SEMANTIC_MODEL"
                     ep_key = f"server:{server.strip().lower()}"
                     if ep_key in seen_endpoints:
                         continue
                     seen_endpoints.add(ep_key)
                     sources.append(
                         PowerQuerySource(
-                            source_type=source_type,
+                            source_type=stype,
                             connection_string=server,
                             server=server,
                             raw_snippet=snippet,
@@ -219,7 +234,7 @@ class MLineageResolver:
             op = "Transformation"
             if any(k in step_body.lower() for k in [
                 "sql.", "postgresql.", "mysql.", "oracle.", "snowflake.", "bigquery.",
-                "odata.", "sharepoint.", "file.", "excel.", "csv.", "web.", "folder.",
+                "analysisservices.", "odata.", "sharepoint.", "file.", "excel.", "csv.", "web.", "folder.",
                 "azurestorage.", "fabric.", "odbc.", "salesforce."
             ]):
                 op = "Source Connection"

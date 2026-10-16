@@ -2222,6 +2222,159 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         self.assertEqual(cfg_set.base_doc_url, "https://portal.company.internal/docs")
         self.assertEqual(cfg_set.external_docs_base_url, "https://portal.company.internal/all")
 
+    def test_directquery_to_analysis_services_model_parsing(self):
+        """Verifies that DirectQuery to AS expressions resolve true remote semantic model name and physical data source."""
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            def_dir = os.path.join(temp_dir, "definition")
+            os.makedirs(os.path.join(def_dir, "tables"))
+
+            # 1. expressions.tmdl
+            with open(os.path.join(def_dir, "expressions.tmdl"), "w", encoding="utf-8") as f:
+                f.write(
+                    "expression 'DirectQuery to AS - AdventureWorks' = AnalysisServices.Database(\"powerbi://api.powerbi.com/v1.0/myorg/Workgroup\", \"AdventureWorks\") meta [IsParameterQuery=true]\n"
+                    "\tlineageTag: 1111-2222\n"
+                )
+
+            # 2. tables/Customer.tmdl
+            with open(os.path.join(def_dir, "tables", "Customer.tmdl"), "w", encoding="utf-8") as f:
+                f.write(
+                    "table Customer\n"
+                    "\tlineageTag: 3333-4444\n\n"
+                    "\tpartition Customer = entity\n"
+                    "\t\tmode: directQuery\n"
+                    "\t\tsource\n"
+                    "\t\t\tentityName: DimCustomer\n"
+                    "\t\t\texpressionSource: 'DirectQuery to AS - AdventureWorks'\n\n"
+                    "\tcolumn CustomerKey\n"
+                    "\t\tdataType: int64\n\n"
+                    "\tmeasure 'Total Sales' = EXTERNALMEASURE(\"Total Sales\", DOUBLE, \"DirectQuery to AS - AdventureWorks\")\n"
+                )
+
+            parser = PBIPParser()
+            model = parser.parse(temp_dir)
+
+            # Verify table resolution
+            self.assertEqual(len(model.tables), 1)
+            tbl = model.tables[0]
+            self.assertTrue(tbl.is_inherited)
+            self.assertEqual(tbl.inherited_expression_source, "DirectQuery to AS - AdventureWorks")
+            self.assertEqual(tbl.inherited_entity_name, "DimCustomer")
+            self.assertEqual(tbl.inherited_model_name, "AdventureWorks")
+
+            # Verify root physical data sources on table
+            self.assertEqual(len(tbl.root_data_sources), 1)
+            src = tbl.root_data_sources[0]
+            self.assertEqual(src.source_type, "POWERBI_SEMANTIC_MODEL")
+            self.assertEqual(src.server, "powerbi://api.powerbi.com/v1.0/myorg/Workgroup")
+            self.assertEqual(src.database, "AdventureWorks")
+
+            # Verify measure resolution
+            self.assertEqual(len(model.measures), 1)
+            meas = model.measures[0]
+            self.assertTrue(meas.is_inherited)
+            self.assertTrue(meas.is_external_measure)
+            self.assertEqual(meas.inherited_model_name, "AdventureWorks")
+
+            # Verify physical data sources summary at model scope
+            self.assertTrue(len(model.data_sources_summary) >= 1)
+            sum_src = next(s for s in model.data_sources_summary if s.database == "AdventureWorks")
+            self.assertEqual(sum_src.source_type, "POWERBI_SEMANTIC_MODEL")
+            self.assertEqual(sum_src.server, "powerbi://api.powerbi.com/v1.0/myorg/Workgroup")
+
+            # Verify Markdown Generation & Absolute Links
+            cfg = DocGenConfig(
+                external_docs_base_url="https://docs.company.internal/bi/models",
+            )
+            gen = MarkdownDocGenerator(config=cfg)
+            docs = gen.generate_all_documents(model.to_dict())
+
+            index_md = docs["INDEX.md"]
+            # 1. Physical data sources section in INDEX.md
+            self.assertIn("## Detected Physical Data Sources", index_md)
+            self.assertIn("`POWERBI_SEMANTIC_MODEL`", index_md)
+            self.assertIn("`powerbi://api.powerbi.com/v1.0/myorg/Workgroup`", index_md)
+            self.assertIn("`AdventureWorks`", index_md)
+
+            # 2. Absolute link to table must use AdventureWorks, NOT DirectQuery to AS - AdventureWorks
+            self.assertIn(
+                "[`Customer`](https://docs.company.internal/bi/models/AdventureWorks/tables/DimCustomer.md) *(External)*",
+                index_md,
+            )
+            self.assertNotIn("DirectQuery to AS - AdventureWorks/tables", index_md)
+
+            # 3. Absolute link to measure must use AdventureWorks, NOT DirectQuery to AS - AdventureWorks
+            self.assertIn(
+                "[`[Total Sales]`](https://docs.company.internal/bi/models/AdventureWorks/measures/DimCustomer/Total_Sales.md) *(External)*",
+                index_md,
+            )
+            self.assertNotIn("DirectQuery to AS - AdventureWorks/measures", index_md)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_directquery_to_as_ssas_and_databases_navigation(self):
+        """Verifies SSAS localhost connections and AnalysisServices.Databases navigation parsing."""
+        m_ssas = 'Source = AnalysisServices.Database("localhost:50000", "LocalCube")'
+        resolver = MLineageResolver({"SSASQuery": {"m_code": m_ssas, "is_staging": True}})
+        sources = resolver.get_all_root_sources()
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(sources[0].source_type, "ANALYSIS_SERVICES")
+        self.assertEqual(sources[0].server, "localhost:50000")
+        self.assertEqual(sources[0].database, "LocalCube")
+
+        m_nav = 'Source = AnalysisServices.Databases("powerbi://api.powerbi.com/v1.0/myorg/Workspace"){[Name="FinanceModel"]}[Data]'
+        resolver2 = MLineageResolver({"NavQuery": {"m_code": m_nav, "is_staging": True}})
+        sources2 = resolver2.get_all_root_sources()
+        self.assertEqual(len(sources2), 1)
+        self.assertEqual(sources2[0].source_type, "POWERBI_SEMANTIC_MODEL")
+        self.assertEqual(sources2[0].server, "powerbi://api.powerbi.com/v1.0/myorg/Workspace")
+        self.assertEqual(sources2[0].database, "FinanceModel")
+
+    def test_directquery_to_as_fallback_without_expression_code(self):
+        """Verifies that when M code is omitted, DirectQuery to AS - ModelName still extracts ModelName cleanly."""
+        sample_model = {
+            "model_name": "ThinReport",
+            "source_format": "TMDL",
+            "tables": [
+                {
+                    "name": "DimStore",
+                    "role": "DIMENSION",
+                    "is_inherited": True,
+                    "inherited_expression_source": "DirectQuery to AS - RetailAnalytics",
+                    "inherited_entity_name": "Store",
+                    "columns": [{"name": "StoreID", "data_type": "int64"}],
+                }
+            ],
+            "measures": [
+                {
+                    "name": "StoreCount",
+                    "table": "DimStore",
+                    "is_external_measure": True,
+                    "is_inherited": True,
+                    "dax_expression": 'EXTERNALMEASURE("StoreCount", INTEGER, "DirectQuery to AS - RetailAnalytics")',
+                }
+            ],
+            "relationships": [],
+            "data_sources_summary": [],
+        }
+
+        cfg = DocGenConfig(external_docs_base_url="https://docs.company.internal/bi/models")
+        tbl_url = cfg.resolve_external_table_url(sample_model["tables"][0])
+        self.assertEqual(
+            tbl_url,
+            "https://docs.company.internal/bi/models/RetailAnalytics/tables/Store.md",
+        )
+
+        meas_url = cfg.resolve_external_measure_url(sample_model["measures"][0], sample_model["tables"])
+        self.assertEqual(
+            meas_url,
+            "https://docs.company.internal/bi/models/RetailAnalytics/measures/Store/StoreCount.md",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

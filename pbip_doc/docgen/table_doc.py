@@ -143,7 +143,12 @@ class TableDocBuilder:
 
         if self.table.get("is_inherited"):
             ent_label = self.table.get("inherited_entity_name") or self.name
-            src_label = f" (Source: `{self.table.get('inherited_expression_source')}`)" if self.table.get("inherited_expression_source") else ""
+            if self.table.get("inherited_model_name"):
+                src_label = f" (Source Model: `{self.table.get('inherited_model_name')}`)"
+            elif self.table.get("inherited_expression_source"):
+                src_label = f" (Source: `{self.table.get('inherited_expression_source')}`)"
+            else:
+                src_label = ""
             ext_url = self.config.resolve_external_table_url(self.table)
             if ext_url and self.config.include_markdown_links:
                 ent_display = f"[{ent_label}]({ext_url})"

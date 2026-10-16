@@ -180,13 +180,36 @@ class DocGenConfig:
         src_expr = table_data.get("inherited_expression_source")
         ent_name = table_data.get("inherited_entity_name") or table_data.get("name")
         tbl_name = table_data.get("name")
+        model_name = table_data.get("inherited_model_name")
+        if not model_name and src_expr:
+            dq_match = re.search(r'^(?:DirectQuery\s+to\s+AS\s*-\s*)(.+)$', src_expr.strip().strip("'\""), re.IGNORECASE)
+            if dq_match:
+                model_name = dq_match.group(1).strip().strip("'\"")
+            elif src_expr.strip().strip("'\"") != "DatabaseQuery":
+                model_name = src_expr.strip().strip("'\"")
 
         base_url = None
-        for candidate in [src_expr, ent_name, tbl_name]:
+        # 1. Check explicit mappings in external_doc_paths
+        for candidate in [model_name, src_expr, ent_name, tbl_name]:
             if candidate:
-                base_url = self.resolve_external_base_url(candidate)
+                cand_clean = str(candidate).strip().strip("'\"")
+                if cand_clean in self.external_doc_paths:
+                    base_url = self.external_doc_paths[cand_clean]
+                    break
+                for k, v in self.external_doc_paths.items():
+                    if k.strip().strip("'\"").lower() == cand_clean.lower():
+                        base_url = v
+                        break
                 if base_url:
                     break
+
+        # 2. Global external docs base URL (<external_docs_base_url>/<model_name>)
+        if not base_url and self.external_docs_base_url:
+            ref_folder = model_name or ent_name or tbl_name
+            if ref_folder:
+                folder_clean = str(ref_folder).strip().strip("'\"")
+                folder_name = sanitize_filename(folder_clean) if self.sanitize_filenames else folder_clean
+                base_url = join_doc_path(self.external_docs_base_url, folder_name)
 
         if not base_url:
             return None
@@ -230,12 +253,41 @@ class DocGenConfig:
         remote_tbl_name = (host_tbl.get("inherited_entity_name") or tbl_name) if host_tbl else tbl_name
         tbl_source = host_tbl.get("inherited_expression_source") if host_tbl else None
 
+        model_name = measure_data.get("inherited_model_name") or (host_tbl.get("inherited_model_name") if host_tbl else None)
+        if not model_name:
+            for s in [dax_source, tbl_source]:
+                if s:
+                    s_clean = s.strip().strip("'\"")
+                    dq_m = re.search(r'^(?:DirectQuery\s+to\s+AS\s*-\s*)(.+)$', s_clean, re.IGNORECASE)
+                    if dq_m:
+                        model_name = dq_m.group(1).strip().strip("'\"")
+                        break
+                    elif s_clean != "DatabaseQuery":
+                        model_name = s_clean
+                        break
+
         base_url = None
-        for candidate in [dax_source, tbl_source, remote_tbl_name, tbl_name, remote_m_name, measure_data.get("name")]:
+        # 1. Check explicit mappings in external_doc_paths
+        for candidate in [model_name, dax_source, tbl_source, remote_tbl_name, tbl_name, remote_m_name, measure_data.get("name")]:
             if candidate:
-                base_url = self.resolve_external_base_url(candidate)
+                cand_clean = str(candidate).strip().strip("'\"")
+                if cand_clean in self.external_doc_paths:
+                    base_url = self.external_doc_paths[cand_clean]
+                    break
+                for k, v in self.external_doc_paths.items():
+                    if k.strip().strip("'\"").lower() == cand_clean.lower():
+                        base_url = v
+                        break
                 if base_url:
                     break
+
+        # 2. Global external docs base URL (<external_docs_base_url>/<model_name>)
+        if not base_url and self.external_docs_base_url:
+            ref_folder = model_name or remote_tbl_name or tbl_name
+            if ref_folder:
+                folder_clean = str(ref_folder).strip().strip("'\"")
+                folder_name = sanitize_filename(folder_clean) if self.sanitize_filenames else folder_clean
+                base_url = join_doc_path(self.external_docs_base_url, folder_name)
 
         if not base_url:
             return None

@@ -216,7 +216,8 @@ class PBIPParser:
                     source_type = "InheritedEntity"
                     is_inherited = True
                     inherited_entity_name = part_source.get("entityName", t_name)
-                    inherited_expression_source = part_source.get("expressionSource")
+                    raw_exp = part_source.get("expressionSource")
+                    inherited_expression_source = str(raw_exp).strip().strip("'\"") if raw_exp else None
                 elif p_type == "m" or "let" in query_body:
                     source_type = "PowerQuery"
                     table_m_code = query_body
@@ -605,7 +606,7 @@ class PBIPParser:
             ent_m = re.search(r'entityName:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
             inherited_entity_name = ent_m.group(1).strip() if ent_m else table_name
             exp_m = re.search(r'expressionSource:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
-            inherited_expression_source = exp_m.group(1).strip() if exp_m else None
+            inherited_expression_source = exp_m.group(1).strip().strip("'\"") if exp_m else None
         elif m_partition_match:
             table_m_code = m_partition_match.group(1).strip()
             # Stop before annotations or next major block
@@ -1184,16 +1185,102 @@ class PBIPParser:
                 tbl.upstream_queries_chain = lineage.all_upstream_queries
             elif tbl.is_inherited:
                 entity_label = tbl.inherited_entity_name or tbl.name
-                conn_str = f"Entity: {entity_label}"
-                if tbl.inherited_expression_source:
-                    conn_str += f" (Source: {tbl.inherited_expression_source})"
-                tbl.root_data_sources = [
-                    PowerQuerySource(
-                        source_type="INHERITED_ENTITY",
-                        connection_string=conn_str,
+                src_expr_name = tbl.inherited_expression_source.strip().strip("'\"") if tbl.inherited_expression_source else ""
+
+                # Try to resolve expression in m_resolver
+                expr_node = None
+                if src_expr_name:
+                    for q_name, node in m_resolver.nodes.items():
+                        if q_name.strip().strip("'\"").lower() == src_expr_name.lower():
+                            expr_node = node
+                            break
+
+                remote_model = None
+                matched_source = None
+
+                if expr_node:
+                    # Link table downstream to expression node
+                    if tbl.name not in expr_node.downstream_tables:
+                        expr_node.downstream_tables.append(tbl.name)
+                    tbl.upstream_queries_chain = [expr_node.query_name]
+
+                    # Check if expression node has physical sources (e.g. AnalysisServices.Database)
+                    if expr_node.root_sources:
+                        as_src = next((s for s in expr_node.root_sources if s.source_type in ("ANALYSIS_SERVICES", "POWERBI_SEMANTIC_MODEL") or s.database), None)
+                        if as_src:
+                            matched_source = as_src
+                            if as_src.database:
+                                remote_model = as_src.database
+
+                # Fallback: parse model name from expression name if starts with DirectQuery to AS -
+                if not remote_model and src_expr_name:
+                    dq_match = re.search(r'^(?:DirectQuery\s+to\s+AS\s*-\s*)(.+)$', src_expr_name, re.IGNORECASE)
+                    if dq_match:
+                        remote_model = dq_match.group(1).strip().strip("'\"")
+                    elif src_expr_name and src_expr_name != "DatabaseQuery":
+                        remote_model = src_expr_name
+
+                if remote_model:
+                    tbl.inherited_model_name = remote_model
+
+                if matched_source:
+                    tbl.root_data_sources = [matched_source]
+                elif remote_model:
+                    stype = "ANALYSIS_SERVICES"
+                    if expr_node and any(pbi in expr_node.full_m_expression.lower() for pbi in ("powerbi://", "api.powerbi.com", "pbiazure://")):
+                        stype = "POWERBI_SEMANTIC_MODEL"
+                    as_source = PowerQuerySource(
+                        source_type=stype,
+                        connection_string=f"Analysis Services / {remote_model}",
+                        database=remote_model,
                         endpoint_or_path=entity_label,
                     )
-                ]
+                    tbl.root_data_sources = [as_source]
+                    if expr_node and not expr_node.root_sources:
+                        expr_node.root_sources.append(as_source)
+                else:
+                    conn_str = f"Entity: {entity_label}"
+                    if tbl.inherited_expression_source:
+                        conn_str += f" (Source: {tbl.inherited_expression_source})"
+                    tbl.root_data_sources = [
+                        PowerQuerySource(
+                            source_type="INHERITED_ENTITY",
+                            connection_string=conn_str,
+                            endpoint_or_path=entity_label,
+                        )
+                    ]
+
+        # Resolve inherited_model_name for external measures
+        for m in measures:
+            if m.is_inherited or m.is_external_measure:
+                # 1. Inherit from host table if known
+                host_tbl = next((t for t in tables if t.name == m.table), None)
+                if host_tbl and host_tbl.inherited_model_name:
+                    m.inherited_model_name = host_tbl.inherited_model_name
+                else:
+                    # 2. Extract from EXTERNALMEASURE 3rd argument
+                    ext_m = re.search(
+                        r'EXTERNALMEASURE\s*\(\s*["\'](?P<mname>.*?)["\']\s*(?:,\s*[^,]+(?:\s*,\s*["\'](?P<sname>.*?)["\'])?)?',
+                        m.dax_expression or "",
+                        re.IGNORECASE
+                    )
+                    if ext_m and ext_m.group("sname"):
+                        raw_sname = ext_m.group("sname").strip().strip("'\"")
+                        matched_node = None
+                        for q_name, node in m_resolver.nodes.items():
+                            if q_name.strip().strip("'\"").lower() == raw_sname.lower():
+                                matched_node = node
+                                break
+                        if matched_node and matched_node.root_sources:
+                            as_src = next((s for s in matched_node.root_sources if s.database), None)
+                            if as_src and as_src.database:
+                                m.inherited_model_name = as_src.database
+                        if not m.inherited_model_name:
+                            dq_match = re.search(r'^(?:DirectQuery\s+to\s+AS\s*-\s*)(.+)$', raw_sname, re.IGNORECASE)
+                            if dq_match:
+                                m.inherited_model_name = dq_match.group(1).strip().strip("'\"")
+                            elif raw_sname != "DatabaseQuery":
+                                m.inherited_model_name = raw_sname
 
         cfg = getattr(self, "active_config", None) or self.config
         if cfg is None:
@@ -1211,7 +1298,19 @@ class PBIPParser:
         shared_queries = [
             node for node in m_resolver.get_all_nodes().values() if node.is_staging
         ]
+
+        # Consolidate all root physical data sources (from queries + inherited tables)
         all_root_sources = m_resolver.get_all_root_sources()
+        unique_sources: Dict[str, PowerQuerySource] = {}
+        for s in all_root_sources:
+            MLineageResolver._merge_source_into_dict(unique_sources, s)
+
+        for tbl in tables:
+            for s in tbl.root_data_sources:
+                if s.source_type != "INHERITED_ENTITY" or not unique_sources:
+                    MLineageResolver._merge_source_into_dict(unique_sources, s)
+
+        all_root_sources = list(unique_sources.values())
 
         # --- Filter Excluded Tables according to configuration BEFORE Topology Estimation ---
         excluded_names = set()

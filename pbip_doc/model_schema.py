@@ -199,6 +199,7 @@ class TableDefinition:
     is_inherited: bool = False
     inherited_entity_name: Optional[str] = None
     inherited_expression_source: Optional[str] = None
+    inherited_model_name: Optional[str] = None
     out_of_scope: bool = False
 
 
@@ -224,6 +225,7 @@ class MeasureDefinition:
     # Inherited Measure / Composite model flags
     is_inherited: bool = False
     is_external_measure: bool = False
+    inherited_model_name: Optional[str] = None
     out_of_scope: bool = False
 
 

@@ -148,7 +148,9 @@ In Power BI architectures using a centralized golden dataset and thin reports co
   - They remain present in global JSON indexes, relationship graphs, and DAG dependencies so the model graph remains intact.
   - They are excluded from generating standalone markdown documentation files unless `include_inherited_entities: true` is configured.
   - **External Links Resolution**:
-    - When `external_docs_base_url` or `external_doc_paths` are set, the generator produces active Markdown links targeting external documentation (e.g. `[RemoteMeasure](https://docs.company.internal/bi/models/measures/Customer/RemoteMeasure.md)`).
+    - When `external_docs_base_url` or `external_doc_paths` are set, the generator produces active Markdown links targeting external documentation (e.g. `[RemoteMeasure](https://docs.company.internal/bi/models/CentralModel/measures/Customer/RemoteMeasure.md)`).
+    - The engine automatically resolves `DirectQuery to AS - <ModelName>` expressions to the underlying semantic model (`<ModelName>`), ensuring absolute links point directly to the remote model documentation rather than the expression name.
+    - Remote Analysis Services and Power BI Semantic Models are automatically parsed and cataloged under **Detected Physical Data Sources** in `INDEX.md`.
     - If no external path is configured, it falls back cleanly to static badges (`*(Inherited Entity)*`, `*(External Measure)*`) without broken links.
   - **Absolute Base URL**:
     - Setting `base_doc_url` ensures all local and external cross-links use absolute URLs (essential for web portals, corporate wikis, intranets, and remote documentation servers).
