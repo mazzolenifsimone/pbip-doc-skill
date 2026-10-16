@@ -78,7 +78,8 @@ Tables are sorted and categorized according to their classified Star Schema role
 - **Utility & Disconnected Tables**: Disconnected tables used for slicers or parameters.
 
 Each entry includes:
-- Markdown link to the dedicated table page.
+- Markdown link to the dedicated table page (`tables/<TableName>.md` or `<base_doc_url>/tables/<TableName>.md`). For inherited tables, links directly to the external model's documentation if configured (with an `*(External)*` badge), or displays a non-linked `*(Inherited Entity)*` indicator.
+- Refresh policy badge (`Full`, `🔄 Incremental`, `⚡ Hybrid`, `📦 Inherited`).
 - Total columns count.
 - Hosted measures count.
 - Classification confidence badge and matching criteria.
@@ -89,7 +90,7 @@ Measures are grouped by their topological calculation depth:
 - **Secondary KPIs (Depth 1)**: Measures referencing at least one Base Measure (e.g. `[Gross Margin] = [Total Sales] - [Total Cost]`).
 - **Composite KPIs (Depth 2+)**: Complex multi-hop ratios, variance, and cumulative metrics (e.g. `[Margin %] = DIVIDE([Gross Margin], [Total Sales])`).
 
-Each entry links to the measure's dedicated Markdown document under `measures/<HostTable>/<MeasureName>.md`.
+Each entry links to the measure's dedicated Markdown document under `measures/<HostTable>/<MeasureName>.md` (or `<base_doc_url>/measures/...`). External measures defined via `EXTERNALMEASURE(...)` link directly to their external documentation page if configured (with an `*(External)*` badge), or show a non-linked `*(External Measure)*` indicator.
 
 ### 5. Custom DAX Functions (UDFs) & Power Query Expressions
 When present, additional sections list:

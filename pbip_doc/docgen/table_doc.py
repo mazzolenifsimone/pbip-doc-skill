@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
 
 
 class TableDocBuilder:
@@ -144,7 +144,12 @@ class TableDocBuilder:
         if self.table.get("is_inherited"):
             ent_label = self.table.get("inherited_entity_name") or self.name
             src_label = f" (Source: `{self.table.get('inherited_expression_source')}`)" if self.table.get("inherited_expression_source") else ""
-            lines.append(f"> ℹ️ **Inherited Entity**: This table is inherited from upstream semantic model entity `{ent_label}`{src_label}.")
+            ext_url = self.config.resolve_external_table_url(self.table)
+            if ext_url and self.config.include_markdown_links:
+                ent_display = f"[{ent_label}]({ext_url})"
+            else:
+                ent_display = f"`{ent_label}`"
+            lines.append(f"> ℹ️ **Inherited Entity**: This table is inherited from upstream semantic model entity {ent_display}{src_label}.")
             lines.append("")
 
         if self.table.get("source_type") == "CalculatedTable":
@@ -202,10 +207,16 @@ class TableDocBuilder:
                 dim_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == dim), None)
                 is_pub = self.config.is_table_published(dim_tbl) if dim_tbl else True
                 if is_pub and self.config.include_markdown_links:
-                    link = f"[{dim}]({sanitize_filename(dim)}.md)"
+                    clean_dim = sanitize_filename(dim)
+                    target_url = join_doc_path(self.config.base_doc_url, self.config.tables_subdir.strip("/\\"), f"{clean_dim}.md") if self.config.base_doc_url else f"{clean_dim}.md"
+                    link = f"[{dim}]({target_url})"
                 else:
-                    badge = " *(Inherited Entity)*" if (dim_tbl and dim_tbl.get("is_inherited")) else ""
-                    link = f"`{dim}`{badge}"
+                    ext_url = self.config.resolve_external_table_url(dim_tbl) if dim_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        link = f"[{dim}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        badge = " *(Inherited Entity)*" if (dim_tbl and dim_tbl.get("is_inherited")) else ""
+                        link = f"`{dim}`{badge}"
                 lines.append(f"- {link} (1:N Relationship)")
 
         # Connected Facts (if Dim) - filtered for excluded tables
@@ -219,10 +230,16 @@ class TableDocBuilder:
                 fact_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == fact), None)
                 is_pub = self.config.is_table_published(fact_tbl) if fact_tbl else True
                 if is_pub and self.config.include_markdown_links:
-                    link = f"[{fact}]({sanitize_filename(fact)}.md)"
+                    clean_fact = sanitize_filename(fact)
+                    target_url = join_doc_path(self.config.base_doc_url, self.config.tables_subdir.strip("/\\"), f"{clean_fact}.md") if self.config.base_doc_url else f"{clean_fact}.md"
+                    link = f"[{fact}]({target_url})"
                 else:
-                    badge = " *(Inherited Entity)*" if (fact_tbl and fact_tbl.get("is_inherited")) else ""
-                    link = f"`{fact}`{badge}"
+                    ext_url = self.config.resolve_external_table_url(fact_tbl) if fact_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        link = f"[{fact}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        badge = " *(Inherited Entity)*" if (fact_tbl and fact_tbl.get("is_inherited")) else ""
+                        link = f"`{fact}`{badge}"
                 lines.append(f"- {link} (1:N Relationship)")
 
         # Snowflake Outrigger Paths - filtered for excluded tables
@@ -304,10 +321,19 @@ class TableDocBuilder:
                     tbl_links = []
                     for t in ref_tables:
                         clean_t = sanitize_filename(t)
-                        if self.config.is_table_published({"name": t, "is_inherited": False}):
-                            tbl_links.append(f"[`{t}`]({clean_t}.md)")
+                        t_data = next((tbl for tbl in self.model.get("tables", []) if tbl.get("name") == t), {"name": t})
+                        if self.config.is_table_published(t_data):
+                            if self.config.base_doc_url:
+                                target_url = join_doc_path(self.config.base_doc_url, self.config.tables_subdir.strip("/\\"), f"{clean_t}.md")
+                            else:
+                                target_url = f"{clean_t}.md"
+                            tbl_links.append(f"[`{t}`]({target_url})")
                         else:
-                            tbl_links.append(f"`{t}`")
+                            ext_url = self.config.resolve_external_table_url(t_data)
+                            if ext_url and self.config.include_markdown_links:
+                                tbl_links.append(f"[`{t}`]({ext_url}) *(External)*")
+                            else:
+                                tbl_links.append(f"`{t}`")
                     lines.append(f"- **Referenced Tables**: {', '.join(tbl_links)}")
                 if ref_cols:
                     col_strs = [f"`{rc.get('table', '')}`[{rc.get('column', '')}]" for rc in ref_cols]
@@ -548,12 +574,19 @@ class TableDocBuilder:
             sanitized = sanitize_filename(m_name)
             is_m_pub = self.config.is_measure_published(m)
             if is_m_pub and self.config.include_markdown_links:
-                meas_path = f"../{meas_sub}/{clean_tbl}/{sanitized}.md" if meas_sub else f"../{clean_tbl}/{sanitized}.md"
+                if self.config.base_doc_url:
+                    meas_path = join_doc_path(self.config.base_doc_url, meas_sub, clean_tbl, f"{sanitized}.md") if meas_sub else join_doc_path(self.config.base_doc_url, clean_tbl, f"{sanitized}.md")
+                else:
+                    meas_path = f"../{meas_sub}/{clean_tbl}/{sanitized}.md" if meas_sub else f"../{clean_tbl}/{sanitized}.md"
                 link = f"[{m_name}]({meas_path})"
             elif is_m_pub:
                 link = f"`[{m_name}]`"
             else:
-                link = f"`[{m_name}]` *(External)*"
+                ext_url = self.config.resolve_external_measure_url(m, self.model.get("tables", []))
+                if ext_url and self.config.include_markdown_links:
+                    link = f"[{m_name}]({ext_url}) *(External)*"
+                else:
+                    link = f"`[{m_name}]` *(External)*"
             depth = f"Depth {m.get('calculation_depth', 0)}"
             deps = ", ".join(f"`[{d}]`" for d in m.get("direct_measure_dependencies", [])) or "— (Base Measure)"
             fmt = f"`{m.get('format_string')}`" if m.get("format_string") else "—"

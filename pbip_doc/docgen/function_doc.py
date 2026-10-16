@@ -6,7 +6,7 @@ Vanilla Python implementation.
 
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
 
 
 class FunctionDocBuilder:
@@ -189,8 +189,13 @@ class FunctionDocBuilder:
                 clean_tbl = sanitize_filename(tbl)
                 depth = f"Depth {m_info.get('calculation_depth', 0)}"
                 sanitized = sanitize_filename(m_name)
-                link = f"[`[{m_name}]`](../measures/{clean_tbl}/{sanitized}.md)" if self.config.include_markdown_links else f"`[{m_name}]`"
-                doc_link = f"[View Measure Document](../measures/{clean_tbl}/{sanitized}.md)" if self.config.include_markdown_links else "—"
+                if self.config.base_doc_url:
+                    meas_sub = self.config.measures_subdir.strip("/\\")
+                    m_url = join_doc_path(self.config.base_doc_url, meas_sub, clean_tbl, f"{sanitized}.md") if meas_sub else join_doc_path(self.config.base_doc_url, clean_tbl, f"{sanitized}.md")
+                else:
+                    m_url = f"../measures/{clean_tbl}/{sanitized}.md"
+                link = f"[`[{m_name}]`]({m_url})" if self.config.include_markdown_links else f"`[{m_name}]`"
+                doc_link = f"[View Measure Document]({m_url})" if self.config.include_markdown_links else "—"
                 lines.append(f"| {link} | `{tbl}` | {depth} | {doc_link} |")
 
         if self.downstream_functions:
@@ -198,7 +203,12 @@ class FunctionDocBuilder:
             lines.append(f"### Directly Dependent Functions ({len(self.downstream_functions)}):")
             for fn_child in sorted(self.downstream_functions):
                 sanitized = sanitize_filename(fn_child)
-                fn_link = f"[{fn_child}]({sanitized}.md)" if self.config.include_markdown_links else f"`{fn_child}`"
+                if self.config.base_doc_url:
+                    fn_sub = self.config.functions_subdir.strip("/\\")
+                    fn_url = join_doc_path(self.config.base_doc_url, fn_sub, f"{sanitized}.md") if fn_sub else join_doc_path(self.config.base_doc_url, f"{sanitized}.md")
+                else:
+                    fn_url = f"{sanitized}.md"
+                fn_link = f"[{fn_child}]({fn_url})" if self.config.include_markdown_links else f"`{fn_child}`"
                 lines.append(f"- {fn_link}")
 
         return "\n".join(lines)
@@ -214,7 +224,12 @@ class FunctionDocBuilder:
             lines.append("### Referenced UDF Functions:")
             for fn_dep in self.referenced_functions:
                 sanitized = sanitize_filename(fn_dep)
-                link = f"[{fn_dep}]({sanitized}.md)" if self.config.include_markdown_links else f"`{fn_dep}`"
+                if self.config.base_doc_url:
+                    fn_sub = self.config.functions_subdir.strip("/\\")
+                    fn_url = join_doc_path(self.config.base_doc_url, fn_sub, f"{sanitized}.md") if fn_sub else join_doc_path(self.config.base_doc_url, f"{sanitized}.md")
+                else:
+                    fn_url = f"{sanitized}.md"
+                link = f"[{fn_dep}]({fn_url})" if self.config.include_markdown_links else f"`{fn_dep}`"
                 lines.append(f"- {link}")
             lines.append("")
 
@@ -224,14 +239,46 @@ class FunctionDocBuilder:
                 tbl = rc.get("table", "")
                 col = rc.get("column", "")
                 clean_tbl = sanitize_filename(tbl)
-                tbl_link = f"[{tbl}](../tables/{clean_tbl}.md)" if self.config.include_markdown_links else f"`{tbl}`"
+                target_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == tbl), None)
+                tbl_pub = self.config.is_table_published(target_tbl) if target_tbl else True
+                if tbl_pub and self.config.include_markdown_links:
+                    if self.config.base_doc_url:
+                        tables_sub = self.config.tables_subdir.strip("/\\")
+                        t_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+                    else:
+                        t_url = f"../tables/{clean_tbl}.md"
+                    tbl_link = f"[{tbl}]({t_url})"
+                elif not tbl_pub:
+                    ext_url = self.config.resolve_external_table_url(target_tbl) if target_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        tbl_link = f"[{tbl}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        tbl_link = f"`{tbl}` *(Inherited Entity)*" if (target_tbl and target_tbl.get("is_inherited")) else f"`{tbl}`"
+                else:
+                    tbl_link = f"`{tbl}`"
                 lines.append(f"- Table {tbl_link} ➔ Column `{col}`")
             lines.append("")
         elif self.referenced_tables:
             lines.append("### Referenced Physical Tables:")
             for tbl in self.referenced_tables:
                 clean_tbl = sanitize_filename(tbl)
-                tbl_link = f"[{tbl}](../tables/{clean_tbl}.md)" if self.config.include_markdown_links else f"`{tbl}`"
+                target_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == tbl), None)
+                tbl_pub = self.config.is_table_published(target_tbl) if target_tbl else True
+                if tbl_pub and self.config.include_markdown_links:
+                    if self.config.base_doc_url:
+                        tables_sub = self.config.tables_subdir.strip("/\\")
+                        t_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+                    else:
+                        t_url = f"../tables/{clean_tbl}.md"
+                    tbl_link = f"[{tbl}]({t_url})"
+                elif not tbl_pub:
+                    ext_url = self.config.resolve_external_table_url(target_tbl) if target_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        tbl_link = f"[{tbl}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        tbl_link = f"`{tbl}` *(Inherited Entity)*" if (target_tbl and target_tbl.get("is_inherited")) else f"`{tbl}`"
+                else:
+                    tbl_link = f"`{tbl}`"
                 lines.append(f"- Table {tbl_link}")
             lines.append("")
 

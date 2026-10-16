@@ -94,6 +94,24 @@ A measure is evaluated for publication through the following conditions:
 - `generate_index_file` (default: `true`): Generates `INDEX.md`.
 - `sanitize_filenames` (default: `true`): Replaces characters invalid in filesystems (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) with underscores.
 - `include_markdown_links` (default: `true`): Enables cross-linking between measures, tables, and expressions.
+- `base_doc_url` (default: `null`): Base URL or absolute path for the documentation currently being generated (e.g. `https://company.sharepoint.com/sites/bi/docs/SalesModel` or `C:/Docs/SalesModel`). When set, relative Markdown links are converted to absolute links.
+- `external_docs_base_url` (default: `null`): Base URL or root directory containing documentation for all external models (structured as `<external_docs_base_url>/<ModelName>/...`).
+- `external_doc_paths` (default: `{}`): Specific base URL mappings per external reference name (e.g. `{"CentralDataModel": "https://company.sharepoint.com/sites/bi/docs/CentralDataModel"}`).
+
+### 🌐 Absolute URLs & Cross-Model External References
+The engine provides automated URL resolution via `join_doc_path`:
+1. **URL & Path Normalization**:
+   - Supports `http://`, `https://`, `file://`, Windows drive paths (`C:\...`), and UNC paths (`\\server\share\...`).
+   - Normalizes Windows backslashes into forward slashes (`/`), guaranteeing valid Markdown links across web browsers, SharePoint, and OneDrive.
+2. **External Entity Resolution**:
+   - For an inherited table or external measure, the engine determines the source model (from `expressionSource` or `EXTERNALMEASURE`).
+   - Resolution order:
+     1. Specific override in `external_doc_paths[model_name]`.
+     2. Global fallback `<external_docs_base_url>/<model_name>/`.
+     3. If neither is configured, the engine renders a non-linked label (`*(Inherited Entity)*` or `*(External Measure)*`).
+3. **Target Structure**:
+   - External Tables: `<external_base>/tables/<TableName>.md`
+   - External Measures: `<external_base>/measures/<HostTable>/<MeasureName>.md`
 
 ### Section Toggle Flags
 Each document type provides modular section toggles:

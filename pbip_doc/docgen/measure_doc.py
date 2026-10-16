@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
 
 
 class MeasureDocBuilder:
@@ -50,10 +50,15 @@ class MeasureDocBuilder:
         return True
 
     def _get_measure_link(self, target_measure_name: str) -> str:
-        """Computes the relative markdown link to another measure file from measures/<Table>/<Measure>.md."""
+        """Computes the relative or absolute markdown link to another measure file."""
         target_table = self.measure_table_map.get(target_measure_name, self.table)
         clean_target_tbl = sanitize_filename(target_table)
         clean_target_m = sanitize_filename(target_measure_name)
+        if self.config.base_doc_url:
+            meas_sub = self.config.measures_subdir.strip("/\\")
+            if meas_sub:
+                return join_doc_path(self.config.base_doc_url, meas_sub, clean_target_tbl, f"{clean_target_m}.md")
+            return join_doc_path(self.config.base_doc_url, clean_target_tbl, f"{clean_target_m}.md")
         return f"../{clean_target_tbl}/{clean_target_m}.md"
 
     def build_markdown(self) -> str:
@@ -139,10 +144,19 @@ class MeasureDocBuilder:
         host_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == self.table), None)
         tbl_published = self.config.is_table_published(host_tbl) if host_tbl else True
         if tbl_published and self.config.include_markdown_links:
-            table_link = f"[{self.table}](../../tables/{clean_tbl}.md)"
+            if self.config.base_doc_url:
+                tables_sub = self.config.tables_subdir.strip("/\\")
+                target_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+            else:
+                target_url = f"../../tables/{clean_tbl}.md"
+            table_link = f"[{self.table}]({target_url})"
         else:
-            badge = " *(Inherited Entity)*" if (host_tbl and host_tbl.get("is_inherited")) else ""
-            table_link = f"`{self.table}`{badge}"
+            ext_url = self.config.resolve_external_table_url(host_tbl) if host_tbl else None
+            if ext_url and self.config.include_markdown_links:
+                table_link = f"[{self.table}]({ext_url}) *(Inherited Entity)*"
+            else:
+                badge = " *(Inherited Entity)*" if (host_tbl and host_tbl.get("is_inherited")) else ""
+                table_link = f"`{self.table}`{badge}"
 
         lines = [
             f"# Measure: `[{self.name}]`",
@@ -166,7 +180,11 @@ class MeasureDocBuilder:
             lines.append("")
 
         if self.measure.get("is_inherited") or self.measure.get("is_external_measure"):
-            lines.append(f"> ℹ️ **External Measure**: This measure is declared via `EXTERNALMEASURE(...)` pointing to an upstream semantic model.")
+            ext_url = self.config.resolve_external_measure_url(self.measure, self.model.get("tables", []))
+            if ext_url and self.config.include_markdown_links:
+                lines.append(f"> ℹ️ **External Measure**: This measure is declared via `EXTERNALMEASURE(...)` pointing to upstream measure [{self.name}]({ext_url}).")
+            else:
+                lines.append(f"> ℹ️ **External Measure**: This measure is declared via `EXTERNALMEASURE(...)` pointing to an upstream semantic model.")
             lines.append("")
 
         if self.depth == 0:
@@ -211,8 +229,12 @@ class MeasureDocBuilder:
                     meas_link = self._get_measure_link(dep)
                     link = f"[{dep}]({meas_link})"
                 else:
-                    badge = " *(External Measure)*" if (dep_m and (dep_m.get("is_inherited") or dep_m.get("is_external_measure"))) else ""
-                    link = f"`[{dep}]`{badge}"
+                    ext_url = self.config.resolve_external_measure_url(dep_m, self.model.get("tables", [])) if dep_m else None
+                    if ext_url and self.config.include_markdown_links:
+                        link = f"[{dep}]({ext_url}) *(External Measure)*"
+                    else:
+                        badge = " *(External Measure)*" if (dep_m and (dep_m.get("is_inherited") or dep_m.get("is_external_measure"))) else ""
+                        link = f"`[{dep}]`{badge}"
                 lines.append(f"- {link}")
 
             if len(self.all_upstream) > len(self.direct_deps):
@@ -224,8 +246,12 @@ class MeasureDocBuilder:
                         meas_link = self._get_measure_link(u)
                         link = f"[{u}]({meas_link})"
                     else:
-                        badge = " *(External Measure)*" if (u_m and (u_m.get("is_inherited") or u_m.get("is_external_measure"))) else ""
-                        link = f"`[{u}]`{badge}"
+                        ext_url = self.config.resolve_external_measure_url(u_m, self.model.get("tables", [])) if u_m else None
+                        if ext_url and self.config.include_markdown_links:
+                            link = f"[{u}]({ext_url}) *(External Measure)*"
+                        else:
+                            badge = " *(External Measure)*" if (u_m and (u_m.get("is_inherited") or u_m.get("is_external_measure"))) else ""
+                            link = f"`[{u}]`{badge}"
                     lines.append(f"- {link}")
 
         if self.referenced_functions:
@@ -234,7 +260,12 @@ class MeasureDocBuilder:
             lines.append("This measure invokes the following custom model functions defined in `functions.tmdl`:")
             for fn_name in self.referenced_functions:
                 sanitized_fn = sanitize_filename(fn_name)
-                fn_link = f"[`{fn_name}`](../../functions/{sanitized_fn}.md)" if self.config.include_markdown_links else f"`{fn_name}`"
+                if self.config.base_doc_url:
+                    functions_sub = self.config.functions_subdir.strip("/\\")
+                    fn_url = join_doc_path(self.config.base_doc_url, functions_sub, f"{sanitized_fn}.md") if functions_sub else join_doc_path(self.config.base_doc_url, f"{sanitized_fn}.md")
+                else:
+                    fn_url = f"../../functions/{sanitized_fn}.md"
+                fn_link = f"[`{fn_name}`]({fn_url})" if self.config.include_markdown_links else f"`{fn_name}`"
                 lines.append(f"- {fn_link}")
 
         return "\n".join(lines)
@@ -274,14 +305,46 @@ class MeasureDocBuilder:
                 tbl = rc.get("table", "")
                 col = rc.get("column", "")
                 clean_tbl = sanitize_filename(tbl)
-                table_link = f"[{tbl}](../../tables/{clean_tbl}.md)" if self.config.include_markdown_links else f"`{tbl}`"
+                target_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == tbl), None)
+                tbl_pub = self.config.is_table_published(target_tbl) if target_tbl else True
+                if tbl_pub and self.config.include_markdown_links:
+                    if self.config.base_doc_url:
+                        tables_sub = self.config.tables_subdir.strip("/\\")
+                        t_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+                    else:
+                        t_url = f"../../tables/{clean_tbl}.md"
+                    table_link = f"[{tbl}]({t_url})"
+                elif not tbl_pub:
+                    ext_url = self.config.resolve_external_table_url(target_tbl) if target_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        table_link = f"[{tbl}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        table_link = f"`{tbl}` *(Inherited Entity)*" if (target_tbl and target_tbl.get("is_inherited")) else f"`{tbl}`"
+                else:
+                    table_link = f"`{tbl}`"
                 lines.append(f"- Table {table_link} ➔ Column `{col}`")
         elif self.referenced_tables:
             lines.append("The DAX formula references the following tables:")
             lines.append("")
             for tbl in self.referenced_tables:
                 clean_tbl = sanitize_filename(tbl)
-                table_link = f"[{tbl}](../../tables/{clean_tbl}.md)" if self.config.include_markdown_links else f"`{tbl}`"
+                target_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == tbl), None)
+                tbl_pub = self.config.is_table_published(target_tbl) if target_tbl else True
+                if tbl_pub and self.config.include_markdown_links:
+                    if self.config.base_doc_url:
+                        tables_sub = self.config.tables_subdir.strip("/\\")
+                        t_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+                    else:
+                        t_url = f"../../tables/{clean_tbl}.md"
+                    table_link = f"[{tbl}]({t_url})"
+                elif not tbl_pub:
+                    ext_url = self.config.resolve_external_table_url(target_tbl) if target_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        table_link = f"[{tbl}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        table_link = f"`{tbl}` *(Inherited Entity)*" if (target_tbl and target_tbl.get("is_inherited")) else f"`{tbl}`"
+                else:
+                    table_link = f"`{tbl}`"
                 lines.append(f"- Table {table_link}")
 
         return "\n".join(lines)

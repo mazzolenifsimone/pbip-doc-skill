@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
 
 
 class IndexDocBuilder:
@@ -145,9 +145,17 @@ class IndexDocBuilder:
             m_count = len([m for m in measures if m.get("table") == name])
             clean_tbl = sanitize_filename(name)
             if self.config.is_table_published(t):
-                link = f"[`{name}`]({self.config.tables_subdir}/{clean_tbl}.md)"
+                if self.config.base_doc_url:
+                    tbl_url = join_doc_path(self.config.base_doc_url, self.config.tables_subdir.strip("/\\"), f"{clean_tbl}.md")
+                else:
+                    tbl_url = f"{self.config.tables_subdir}/{clean_tbl}.md"
+                link = f"[`{name}`]({tbl_url})"
             else:
-                link = "— *(Inherited Entity)*"
+                ext_url = self.config.resolve_external_table_url(t)
+                if ext_url:
+                    link = f"[`{name}`]({ext_url}) *(External)*"
+                else:
+                    link = "— *(Inherited Entity)*"
             lines.append(f"| `{name}` | {role} | {refresh_badge} | {col_count} | {m_count} | {link} |")
 
         calc_count = len([t for t in sorted_tables if t.get("source_type") == "CalculatedTable"])
@@ -200,9 +208,17 @@ class IndexDocBuilder:
             clean_tbl = sanitize_filename(tbl)
             sanitized = sanitize_filename(m_name)
             if self.config.is_measure_published(m):
-                link = f"[`[{m_name}]`]({self.config.measures_subdir}/{clean_tbl}/{sanitized}.md)"
+                if self.config.base_doc_url:
+                    meas_url = join_doc_path(self.config.base_doc_url, self.config.measures_subdir.strip("/\\"), clean_tbl, f"{sanitized}.md")
+                else:
+                    meas_url = f"{self.config.measures_subdir}/{clean_tbl}/{sanitized}.md"
+                link = f"[`[{m_name}]`]({meas_url})"
             else:
-                link = "— *(External Measure)*"
+                ext_url = self.config.resolve_external_measure_url(m, self.model.get("tables", []))
+                if ext_url:
+                    link = f"[`[{m_name}]`]({ext_url}) *(External)*"
+                else:
+                    link = "— *(External Measure)*"
             deps = ", ".join(f"`[{d}]`" for d in m.get("direct_measure_dependencies", [])) or "— (Base Measure)"
             lines.append(f"| `[{m_name}]` | `{tbl}` | {depth} | {deps} | {link} |")
 
@@ -236,7 +252,11 @@ class IndexDocBuilder:
             sig = fn.get("parameters_signature") or "()"
             sanitized = sanitize_filename(fn_name)
             down_count = len(fn.get("downstream_measures", []))
-            link = f"[`{fn_name}`]({self.config.functions_subdir}/{sanitized}.md)"
+            if self.config.base_doc_url:
+                fn_url = join_doc_path(self.config.base_doc_url, self.config.functions_subdir.strip("/\\"), f"{sanitized}.md")
+            else:
+                fn_url = f"{self.config.functions_subdir}/{sanitized}.md"
+            link = f"[`{fn_name}`]({fn_url})"
             lines.append(f"| `{fn_name}` | `{ret_type}` | `{sig}` | {down_count} | {link} |")
 
         return "\n".join(lines)
@@ -288,7 +308,11 @@ class IndexDocBuilder:
                 t_links = []
                 for dt in downstream:
                     clean_dt = sanitize_filename(dt)
-                    t_links.append(f"[`{dt}`]({tables_sub}/{clean_dt}.md)")
+                    if self.config.base_doc_url:
+                        dt_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_dt}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_dt}.md")
+                    else:
+                        dt_url = f"{tables_sub}/{clean_dt}.md" if tables_sub else f"{clean_dt}.md"
+                    t_links.append(f"[`{dt}`]({dt_url})")
                 downstream_str = ", ".join(t_links)
             else:
                 downstream_str = "— *(Unloaded)*"
@@ -301,7 +325,11 @@ class IndexDocBuilder:
             else:
                 sources_str = "—"
 
-            doc_link = f"[`{name}`]({expressions_sub}/{clean_name}.md)"
+            if self.config.base_doc_url:
+                expr_url = join_doc_path(self.config.base_doc_url, expressions_sub, f"{clean_name}.md") if expressions_sub else join_doc_path(self.config.base_doc_url, f"{clean_name}.md")
+            else:
+                expr_url = f"{expressions_sub}/{clean_name}.md" if expressions_sub else f"{clean_name}.md"
+            doc_link = f"[`{name}`]({expr_url})"
             lines.append(f"| `{name}` | {type_badge} | {inline_info} | {downstream_str} | {sources_str} | {doc_link} |")
 
         return "\n".join(lines)

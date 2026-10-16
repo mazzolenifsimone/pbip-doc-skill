@@ -25,6 +25,28 @@ def sanitize_filename(name: str) -> str:
     return cleaned or "unnamed"
 
 
+def join_doc_path(base: str, *parts: str) -> str:
+    """
+    Joins a base URL or file path with one or more path components using forward slashes.
+    Preserves http://, https://, file://, Windows drive letters (C:/), and UNC paths (//server/share).
+    Avoids duplicate slashes and normalizes paths for Markdown link compatibility.
+    """
+    if not base:
+        sub_parts = [str(p).strip("/\\").replace("\\", "/") for p in parts if str(p).strip("/\\")]
+        return "/".join(sub_parts)
+
+    is_network = base.startswith("\\\\") or base.startswith("//")
+    clean_base = base.replace("\\", "/").rstrip("/")
+    if is_network and not clean_base.startswith("//"):
+        clean_base = "/" + clean_base
+
+    sub_parts = [str(p).strip("/\\").replace("\\", "/") for p in parts if str(p).strip("/\\")]
+    if not sub_parts:
+        return clean_base
+    return clean_base + "/" + "/".join(sub_parts)
+
+
+
 def format_yaml_frontmatter(data: Dict[str, Any]) -> str:
     """
     Serializes a dictionary into standard clean YAML frontmatter block.

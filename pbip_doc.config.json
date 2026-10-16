@@ -46,5 +46,8 @@
   "expressions_subdir": "expressions",
   "generate_index_file": true,
   "sanitize_filenames": true,
-  "include_markdown_links": true
+  "include_markdown_links": true,
+  "base_doc_url": null,
+  "external_docs_base_url": null,
+  "external_doc_paths": {}
 }

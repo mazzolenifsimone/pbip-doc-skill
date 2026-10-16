@@ -8,7 +8,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
 from ..m_table_parser import parse_m_inline_table
 
 
@@ -232,7 +232,12 @@ class ExpressionDocBuilder:
             lines.append("### Directly Referenced Queries:")
             for dep in self.direct_deps:
                 clean_dep = sanitize_filename(dep)
-                link = f"[{dep}]({clean_dep}.md)" if self.config.include_markdown_links else f"`{dep}`"
+                if self.config.base_doc_url:
+                    expr_sub = self.config.expressions_subdir.strip("/\\")
+                    q_url = join_doc_path(self.config.base_doc_url, expr_sub, f"{clean_dep}.md") if expr_sub else join_doc_path(self.config.base_doc_url, f"{clean_dep}.md")
+                else:
+                    q_url = f"{clean_dep}.md"
+                link = f"[{dep}]({q_url})" if self.config.include_markdown_links else f"`{dep}`"
                 lines.append(f"- {link}")
 
         # Downstream queries
@@ -241,7 +246,12 @@ class ExpressionDocBuilder:
             lines.append("### Downstream Queries Consuming this Expression:")
             for dq in self.downstream_queries:
                 clean_dq = sanitize_filename(dq)
-                link = f"[{dq}]({clean_dq}.md)" if self.config.include_markdown_links else f"`{dq}`"
+                if self.config.base_doc_url:
+                    expr_sub = self.config.expressions_subdir.strip("/\\")
+                    q_url = join_doc_path(self.config.base_doc_url, expr_sub, f"{clean_dq}.md") if expr_sub else join_doc_path(self.config.base_doc_url, f"{clean_dq}.md")
+                else:
+                    q_url = f"{clean_dq}.md"
+                link = f"[{dq}]({q_url})" if self.config.include_markdown_links else f"`{dq}`"
                 lines.append(f"- {link}")
 
         # Target model tables
@@ -251,8 +261,23 @@ class ExpressionDocBuilder:
             tables_sub = self.config.tables_subdir.strip("/\\")
             for tbl in self.downstream_tables:
                 clean_tbl = sanitize_filename(tbl)
-                rel_prefix = f"../{tables_sub}/" if tables_sub else "../"
-                link = f"[{tbl}]({rel_prefix}{clean_tbl}.md)" if self.config.include_markdown_links else f"`{tbl}`"
+                target_tbl = next((t for t in self.model.get("tables", []) if t.get("name") == tbl), None)
+                tbl_pub = self.config.is_table_published(target_tbl) if target_tbl else True
+                if tbl_pub and self.config.include_markdown_links:
+                    if self.config.base_doc_url:
+                        tbl_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
+                    else:
+                        rel_prefix = f"../{tables_sub}/" if tables_sub else "../"
+                        tbl_url = f"{rel_prefix}{clean_tbl}.md"
+                    link = f"[{tbl}]({tbl_url})"
+                elif not tbl_pub:
+                    ext_url = self.config.resolve_external_table_url(target_tbl) if target_tbl else None
+                    if ext_url and self.config.include_markdown_links:
+                        link = f"[{tbl}]({ext_url}) *(Inherited Entity)*"
+                    else:
+                        link = f"`{tbl}` *(Inherited Entity)*" if (target_tbl and target_tbl.get("is_inherited")) else f"`{tbl}`"
+                else:
+                    link = f"`{tbl}`"
                 lines.append(f"- {link}")
         else:
             lines.append("")

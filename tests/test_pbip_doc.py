@@ -1966,7 +1966,272 @@ class TestTopologicalKeyResolution(unittest.TestCase):
         self.assertNotIn("factsales", resolver.relationship_columns)
 
 
+class TestExternalDocUrlsAndCli(unittest.TestCase):
+    def test_join_doc_path(self):
+        from pbip_doc.docgen.utils import join_doc_path
+
+        # Standard web URL
+        url = join_doc_path("https://sp.company.com/sites/bi", "tables", "FactOrders.md")
+        self.assertEqual(url, "https://sp.company.com/sites/bi/tables/FactOrders.md")
+
+        # Trailing / leading slashes normalized
+        url = join_doc_path("https://sp.company.com/sites/bi/", "/tables/", "FactOrders.md")
+        self.assertEqual(url, "https://sp.company.com/sites/bi/tables/FactOrders.md")
+
+        # Windows path converted to forward slashes for markdown link compatibility
+        win_path = join_doc_path("C:\\Docs\\BI", "tables\\FactOrders.md")
+        self.assertEqual(win_path, "C:/Docs/BI/tables/FactOrders.md")
+
+        # UNC network path
+        unc_path = join_doc_path("\\\\server\\share\\docs", "tables", "FactOrders.md")
+        self.assertEqual(unc_path, "//server/share/docs/tables/FactOrders.md")
+
+        # Empty base returns clean relative path
+        rel_path = join_doc_path("", "tables", "FactOrders.md")
+        self.assertEqual(rel_path, "tables/FactOrders.md")
+
+    def test_config_external_url_resolution(self):
+        cfg = DocGenConfig(
+            external_docs_base_url="https://sp.company.com/sites/docs",
+            external_doc_paths={
+                "CentralModel": "https://sp.company.com/sites/central_model",
+            },
+        )
+
+        # 1. Base URL resolution
+        self.assertEqual(
+            cfg.resolve_external_base_url("CentralModel"),
+            "https://sp.company.com/sites/central_model",
+        )
+        self.assertEqual(
+            cfg.resolve_external_base_url("SecondaryModel"),
+            "https://sp.company.com/sites/docs/SecondaryModel",
+        )
+
+        # Empty config resolves to None
+        empty_cfg = DocGenConfig()
+        self.assertIsNone(empty_cfg.resolve_external_base_url("CentralModel"))
+
+        # 2. Table URL resolution
+        table_inherited = {
+            "name": "DimCustomer",
+            "is_inherited": True,
+            "inherited_expression_source": "CentralModel",
+        }
+        self.assertEqual(
+            cfg.resolve_external_table_url(table_inherited),
+            "https://sp.company.com/sites/central_model/tables/DimCustomer.md",
+        )
+
+        table_secondary = {
+            "name": "DimProduct",
+            "is_inherited": True,
+            "inherited_expression_source": "SecondaryModel",
+        }
+        self.assertEqual(
+            cfg.resolve_external_table_url(table_secondary),
+            "https://sp.company.com/sites/docs/SecondaryModel/tables/DimProduct.md",
+        )
+
+        # Local non-inherited table returns None
+        table_local = {"name": "FactSales", "is_inherited": False}
+        self.assertIsNone(cfg.resolve_external_table_url(table_local))
+
+        # 3. Measure URL resolution
+        measure_ext = {
+            "name": "RemoteSales",
+            "table": "DimCustomer",
+            "is_external_measure": True,
+            "dax_expression": 'EXTERNALMEASURE("RemoteSales", DOUBLE, "CentralModel")',
+        }
+        self.assertEqual(
+            cfg.resolve_external_measure_url(measure_ext, [table_inherited]),
+            "https://sp.company.com/sites/central_model/measures/DimCustomer/RemoteSales.md",
+        )
+
+        # Measure where table has the expression source
+        measure_ext2 = {
+            "name": "ProdCount",
+            "table": "DimProduct",
+            "is_external_measure": True,
+            "dax_expression": "",
+        }
+        self.assertEqual(
+            cfg.resolve_external_measure_url(measure_ext2, [table_secondary]),
+            "https://sp.company.com/sites/docs/SecondaryModel/measures/DimProduct/ProdCount.md",
+        )
+
+    def test_markdown_generation_with_base_doc_url(self):
+        sample_model = {
+            "model_name": "TestModel",
+            "source_format": "TMDL",
+            "tables": [
+                {
+                    "name": "FactOrders",
+                    "role": "FACT",
+                    "columns": [
+                        {"name": "OrderID", "data_type": "int64", "is_key": True},
+                        {"name": "Amount", "data_type": "decimal"},
+                    ],
+                    "connected_dimensions": [],
+                    "reachable_lookup_tables": [],
+                    "root_data_sources": [],
+                    "upstream_queries_chain": [],
+                }
+            ],
+            "measures": [
+                {
+                    "name": "Total Sales",
+                    "table": "FactOrders",
+                    "dax_expression": "SUM(FactOrders[Amount])",
+                    "format_string": "$#,0.00",
+                    "calculation_depth": 0,
+                    "direct_measure_dependencies": [],
+                    "all_upstream_measures": [],
+                    "downstream_measures": [],
+                    "referenced_columns": [{"table": "FactOrders", "column": "Amount"}],
+                }
+            ],
+            "relationships": [],
+            "data_sources_summary": [],
+        }
+
+        base_url = "https://sharepoint.com/teams/bi/docs"
+        cfg = DocGenConfig(base_doc_url=base_url)
+        generator = MarkdownDocGenerator(config=cfg)
+        docs = generator.generate_all_documents(sample_model)
+
+        index_doc = docs["INDEX.md"]
+        self.assertIn(f"[`FactOrders`]({base_url}/tables/FactOrders.md)", index_doc)
+        self.assertIn(f"[`[Total Sales]`]({base_url}/measures/FactOrders/Total_Sales.md)", index_doc)
+
+        table_doc = docs["tables/FactOrders.md"]
+        self.assertIn(f"[Total Sales]({base_url}/measures/FactOrders/Total_Sales.md)", table_doc)
+
+        measure_doc = docs["measures/FactOrders/Total_Sales.md"]
+        self.assertIn(f"[FactOrders]({base_url}/tables/FactOrders.md)", measure_doc)
+
+    def test_markdown_generation_external_table_and_measure(self):
+        sample_model = {
+            "model_name": "CompositeModel",
+            "source_format": "TMDL",
+            "tables": [
+                {
+                    "name": "FactSales",
+                    "role": "FACT",
+                    "columns": [{"name": "SalesID", "data_type": "int64"}],
+                    "connected_dimensions": ["DimCustomer"],
+                    "reachable_lookup_tables": [],
+                    "root_data_sources": [],
+                    "upstream_queries_chain": [],
+                },
+                {
+                    "name": "DimCustomer",
+                    "role": "DIMENSION",
+                    "is_inherited": True,
+                    "inherited_expression_source": "CentralDataModel",
+                    "columns": [{"name": "CustID", "data_type": "int64"}],
+                    "connected_dimensions": [],
+                    "reachable_lookup_tables": [],
+                    "root_data_sources": [],
+                    "upstream_queries_chain": [],
+                },
+            ],
+            "measures": [
+                {
+                    "name": "Margin",
+                    "table": "FactSales",
+                    "dax_expression": "[LocalSales] - [RemoteCost]",
+                    "calculation_depth": 1,
+                    "direct_measure_dependencies": ["RemoteCost"],
+                    "all_upstream_measures": ["RemoteCost"],
+                    "downstream_measures": [],
+                    "referenced_columns": [],
+                },
+                {
+                    "name": "RemoteCost",
+                    "table": "DimCustomer",
+                    "is_external_measure": True,
+                    "is_inherited": True,
+                    "dax_expression": 'EXTERNALMEASURE("RemoteCost", CURRENCY, "CentralDataModel")',
+                    "calculation_depth": 0,
+                    "direct_measure_dependencies": [],
+                    "all_upstream_measures": [],
+                    "downstream_measures": ["Margin"],
+                    "referenced_columns": [],
+                },
+            ],
+            "relationships": [],
+            "data_sources_summary": [],
+        }
+
+        # Case 1: External doc URL configured
+        cfg_with_ext = DocGenConfig(
+            external_docs_base_url="https://sharepoint.com/models",
+        )
+        gen1 = MarkdownDocGenerator(config=cfg_with_ext)
+        docs1 = gen1.generate_all_documents(sample_model)
+
+        fact_doc1 = docs1["tables/FactSales.md"]
+        # Connected dimension should now have a link to external doc!
+        self.assertIn("[DimCustomer](https://sharepoint.com/models/CentralDataModel/tables/DimCustomer.md)", fact_doc1)
+
+        margin_doc1 = docs1["measures/FactSales/Margin.md"]
+        # Direct dependency RemoteCost should now have link to external doc!
+        self.assertIn("[RemoteCost](https://sharepoint.com/models/CentralDataModel/measures/DimCustomer/RemoteCost.md)", margin_doc1)
+
+        index_doc1 = docs1["INDEX.md"]
+        self.assertIn("[`[RemoteCost]`](https://sharepoint.com/models/CentralDataModel/measures/DimCustomer/RemoteCost.md) *(External)*", index_doc1)
+
+        # Case 2: NO external doc URL configured -> retains current fallback message without link
+        cfg_no_ext = DocGenConfig()
+        gen2 = MarkdownDocGenerator(config=cfg_no_ext)
+        docs2 = gen2.generate_all_documents(sample_model)
+
+        fact_doc2 = docs2["tables/FactSales.md"]
+        self.assertNotIn("https://", fact_doc2)
+        self.assertIn("`DimCustomer` *(Inherited Entity)*", fact_doc2)
+
+        margin_doc2 = docs2["measures/FactSales/Margin.md"]
+        self.assertNotIn("https://", margin_doc2)
+        self.assertIn("`[RemoteCost]` *(External Measure)*", margin_doc2)
+
+        index_doc2 = docs2["INDEX.md"]
+        self.assertIn("*(External Measure)*", index_doc2)
+
+    def test_cli_flags_doc_urls(self):
+        import argparse
+        from pbip_doc.cli import _load_cli_config, _add_config_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_config_arguments(parser)
+
+        # Test CLI flags parsing
+        cli_args = parser.parse_args([
+            "--base-doc-url", "https://sharepoint.com/sites/bi/current_model",
+            "--external-docs-base-url", "https://sharepoint.com/sites/bi/external_models",
+            "--external-doc-path", "CentralDataModel=https://sharepoint.com/sites/bi/central",
+            "--external-doc-path", "SalesCube=https://sharepoint.com/sites/bi/sales_cube",
+        ])
+
+        cfg = _load_cli_config(cli_args, None)
+        self.assertEqual(cfg.base_doc_url, "https://sharepoint.com/sites/bi/current_model")
+        self.assertEqual(cfg.external_docs_base_url, "https://sharepoint.com/sites/bi/external_models")
+        self.assertEqual(cfg.external_doc_paths.get("CentralDataModel"), "https://sharepoint.com/sites/bi/central")
+        self.assertEqual(cfg.external_doc_paths.get("SalesCube"), "https://sharepoint.com/sites/bi/sales_cube")
+
+        # Test --set with base_doc_path alias
+        cli_args_set = parser.parse_args([
+            "--set", "base_doc_path=https://sp/portal",
+            "--set", "external_docs_base_path=https://sp/all",
+        ])
+        cfg_set = _load_cli_config(cli_args_set, None)
+        self.assertEqual(cfg_set.base_doc_url, "https://sp/portal")
+        self.assertEqual(cfg_set.external_docs_base_url, "https://sp/all")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
 

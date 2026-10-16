@@ -228,7 +228,11 @@ You have three flexible methods to configure runs:
   "tables_subdir": "tables",
   "measures_subdir": "measures",
   "expressions_subdir": "expressions",
-  "functions_subdir": "functions"
+  "functions_subdir": "functions",
+  "include_markdown_links": true,
+  "base_doc_url": null,
+  "external_docs_base_url": null,
+  "external_doc_paths": {}
 }
 ```
 
@@ -238,6 +242,9 @@ You have three flexible methods to configure runs:
 - `--include-inherited-entities`: include and publish standalone documentation files for inherited tables (`partition = entity`) and external measures (`EXTERNALMEASURE`).
 - `--no-frontmatter`: omit YAML frontmatter at top of markdown files.
 - `--no-m-code`: omit raw M code snippets from table documents.
+- `--base-doc-url <URL>` / `--base-doc-path <PATH>`: set the base URL or absolute path for the documentation currently being generated (e.g. `https://company.sharepoint.com/sites/bi/docs/SalesModel` or `C:/Docs/SalesModel`). Replaces relative links with absolute links across all Markdown pages.
+- `--external-docs-base-url <URL>` / `--external-docs-base-path <PATH>`: set the base URL or shared folder containing documentation for all external models (organized as `<url>/<model_name>/tables/...`).
+- `--external-doc-path NAME=URL`: set documentation absolute path for a specific external reference by name (can be repeated, e.g. `--external-doc-path CentralDataModel=https://company.sharepoint.com/sites/bi/docs/CentralDataModel`).
 
 ---
 
@@ -288,10 +295,14 @@ In architectures using a central **Golden Dataset** with multiple thin reports (
   - **Inherited Tables**: identified by `partition ... = entity` in TMDL or TMSL, tracking the source entity (`entityName`) and origin (`expressionSource`).
   - **External Measures**: identified by the DAX function `EXTERNALMEASURE(...)`.
   - **Local Measures and Tables**: report-specific calculations and local tables are recognized as native.
-- **Out-of-Scope Filtering**:
+- **Out-of-Scope Filtering & Documentation Linking**:
   - **Default Behavior (`include_inherited_entities: false`)**: avoids duplicating central model documentation across thin reports. Standalone `.md` files are skipped for inherited entities, while local report measures and tables are documented normally.
-  - **Link Integrity**: inherited tables and measures are still listed in `INDEX.md`, dependency trees, and relationship sections using clear indicators (e.g. `[Customer] *(Inherited Entity)*` and `[Total Sales] *(External Measure)*`), preventing broken links.
-  - **Full Inclusion (`include_inherited_entities: true`)**: set this flag in the config file or via CLI to generate standalone pages for inherited entities as well.
+  - **Fallback Labels**: when no external documentation path is configured, inherited tables and measures are rendered with clean non-linked badges (e.g. `DimCustomer *(Inherited Entity)*` and `[Total Sales] *(External Measure)*`).
+  - **Active External Links (`external_docs_base_url` & `external_doc_paths`)**: when external documentation paths are configured, the generator automatically creates clickable links to the external model's documentation:
+    - Tables: `<external_path>/tables/<TableName>.md`
+    - Measures: `<external_path>/measures/<HomeTable>/<MeasureName>.md`
+    - Links work seamlessly across SharePoint sites, OneDrive, local drives, and intranet portals.
+  - **Full Inclusion (`include_inherited_entities: true`)**: set this flag in the config file or via CLI to generate standalone pages for inherited entities within the current documentation suite as well.
 
 ---
 

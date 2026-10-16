@@ -61,13 +61,19 @@ python generate_json.py path/to/definition -o semantic_model_docs.json --config-
 # 3. Generate modular Markdown documentation
 python generate_docs.py path/to/definition -o docs/ --set include_table_m_code=false
 
-# 4. Initialize a complete configuration template file
+# 4. Generate documentation with SharePoint / OneDrive absolute URLs
+python generate_docs.py path/to/definition -o docs/ \
+  --base-doc-url "https://company.sharepoint.com/sites/bi/docs/CurrentModel" \
+  --external-docs-base-url "https://company.sharepoint.com/sites/bi/docs/ExternalModels" \
+  --external-doc-path "CentralDataModel=https://company.sharepoint.com/sites/bi/docs/CentralDataModel"
+
+# 5. Initialize a complete configuration template file
 python generate_docs.py config --init pbip_doc.config.json
 
-# 5. Display active effective configuration
+# 6. Display active effective configuration
 python generate_docs.py config --show --set output_dir=custom_docs
 
-# 6. Launch MCP stdio server
+# 7. Launch MCP stdio server
 python mcp_server.py
 ```
 
@@ -137,10 +143,15 @@ The engine classifies each table using the following prioritized criteria:
 In Power BI architectures using a centralized golden dataset and thin reports connected via DirectQuery or Live Connection:
 - Tables with `partition = entity` derive from an external source model.
 - Measures defined with `EXTERNALMEASURE` are bound to remote semantic models.
-- **Handling**:
+- **Handling & Documentation Linking**:
   - By default, inherited tables and external measures are flagged with `"is_inherited": true` and `"out_of_scope": true`.
   - They remain present in global JSON indexes, relationship graphs, and DAG dependencies so the model graph remains intact.
   - They are excluded from generating standalone markdown documentation files unless `include_inherited_entities: true` is configured.
+  - **External Links Resolution**:
+    - When `external_docs_base_url` or `external_doc_paths` are set, the generator produces active Markdown links targeting external documentation (e.g. `[RemoteMeasure](https://sharepoint.../measures/Customer/RemoteMeasure.md)`).
+    - If no external path is configured, it falls back cleanly to static badges (`*(Inherited Entity)*`, `*(External Measure)*`) without broken links.
+  - **Absolute Base URL**:
+    - Setting `base_doc_url` ensures all local and external cross-links use absolute URLs (essential for SharePoint, OneDrive, and corporate wikis).
 
 ### DAX Measure DAG and Calculation Depth
 

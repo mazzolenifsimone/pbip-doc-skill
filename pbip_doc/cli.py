@@ -61,11 +61,23 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
         extra_excludes = [t.strip() for t in args.exclude_tables.split(",") if t.strip()]
         config.excluded_tables.extend(extra_excludes)
 
+    if getattr(args, "base_doc_url", None):
+        config.base_doc_url = args.base_doc_url
+
+    if getattr(args, "external_docs_base_url", None):
+        config.external_docs_base_url = args.external_docs_base_url
+
+    if getattr(args, "external_doc_path", None):
+        for item in args.external_doc_path:
+            if "=" in item:
+                k, v = item.split("=", 1)
+                config.external_doc_paths[k.strip()] = v.strip()
+
     return config
 
 
 def _add_config_arguments(p: argparse.ArgumentParser):
-    """Adds common configuration flags (--config, --config-json, --set, --print-config) to a parser."""
+    """Adds common configuration flags (--config, --config-json, --set, --print-config, URL flags) to a parser."""
     p.add_argument(
         "-c", "--config",
         help="Path to custom JSON configuration file (e.g. pbip_doc.config.json)",
@@ -84,6 +96,24 @@ def _add_config_arguments(p: argparse.ArgumentParser):
         "--print-config",
         action="store_true",
         help="Print the effective configuration to stdout before executing.",
+    )
+    p.add_argument(
+        "--base-doc-url", "--base-doc-path",
+        dest="base_doc_url",
+        default=None,
+        help="Base URL or absolute path for the documentation currently being generated (e.g. SharePoint, OneDrive, or web portal root).",
+    )
+    p.add_argument(
+        "--external-docs-base-url", "--external-docs-base-path",
+        dest="external_docs_base_url",
+        default=None,
+        help="Base URL or directory path containing documentation for all external models (organized as <url>/<model_name>/).",
+    )
+    p.add_argument(
+        "--external-doc-path",
+        action="append",
+        metavar="NAME=URL",
+        help="Set documentation absolute path for a specific external reference by name (e.g. --external-doc-path CentralDataModel=https://sharepoint.../CentralDataModel). Can be repeated.",
     )
 
 
@@ -275,6 +305,12 @@ def main():
                 print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({config.output_dir}/{config.functions_subdir}/)")
             print(f" -> Auto Date Tables Excluded: {'Yes (default)' if config.exclude_auto_date_tables else 'No (included)'}")
             print(f" -> Inherited Entities Published: {'Yes' if config.include_inherited_entities else 'No (out of scope by default)'}")
+            if config.base_doc_url:
+                print(f" -> Base Doc URL: {config.base_doc_url}")
+            if config.external_docs_base_url:
+                print(f" -> External Docs Base URL: {config.external_docs_base_url}")
+            if config.external_doc_paths:
+                print(f" -> External Models Configured: {len(config.external_doc_paths)} ({', '.join(config.external_doc_paths.keys())})")
             print(f" -> Format: Pure Markdown + YAML Frontmatter (AI-RAG optimized)")
         except Exception as e:
             print(f"[ERROR] Failed to generate documentation: {e}", file=sys.stderr)
