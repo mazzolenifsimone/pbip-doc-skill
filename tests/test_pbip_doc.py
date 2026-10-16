@@ -2229,6 +2229,37 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         self.assertEqual(cfg_set.base_doc_url, "https://portal.company.internal/docs")
         self.assertEqual(cfg_set.external_docs_base_url, "https://portal.company.internal/all")
 
+    def test_parse_json_or_relaxed(self):
+        # 1. Standard valid JSON
+        res1 = DocGenConfig.parse_json_or_relaxed('{"external_docs_base_url": "https://example.com"}')
+        self.assertEqual(res1, {"external_docs_base_url": "https://example.com"})
+
+        # 2. PowerShell quote-stripped argument: {key: value}
+        res2 = DocGenConfig.parse_json_or_relaxed(r"{external_docs_base_url: external\doc\base}")
+        self.assertEqual(res2, {"external_docs_base_url": r"external\doc\base"})
+
+        # 3. Multiple keys with booleans and numbers in quote-stripped format
+        res3 = DocGenConfig.parse_json_or_relaxed(
+            "{include_table_m_code: false, base_doc_url: https://docs.company.internal, retry_count: 5}"
+        )
+        self.assertEqual(res3, {
+            "include_table_m_code": False,
+            "base_doc_url": "https://docs.company.internal",
+            "retry_count": 5,
+        })
+
+        # 4. CLI with quote-stripped --config-json
+        import argparse
+        from pbip_doc.cli import _load_cli_config, _add_config_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_config_arguments(parser)
+        cli_args = parser.parse_args([
+            "--config-json", r"{external_docs_base_url: external\doc\base}",
+        ])
+        cfg = _load_cli_config(cli_args, None)
+        self.assertEqual(cfg.external_docs_base_url, r"external\doc\base")
+
 
 if __name__ == "__main__":
     unittest.main()

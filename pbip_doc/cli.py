@@ -30,7 +30,7 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
     config_json_raw = getattr(args, "config_json", None)
     if config_json_raw:
         try:
-            overrides = json.loads(config_json_raw)
+            overrides = DocGenConfig.parse_json_or_relaxed(config_json_raw)
             if isinstance(overrides, dict):
                 config.apply_overrides(overrides)
             else:

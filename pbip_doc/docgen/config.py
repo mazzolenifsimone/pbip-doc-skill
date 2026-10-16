@@ -7,6 +7,7 @@ Vanilla Python implementation.
 import json
 import os
 import re
+import ast
 from dataclasses import dataclass, field, asdict
 from typing import List, Set, Optional, Dict, Any, Tuple
 
@@ -369,6 +370,70 @@ class DocGenConfig:
             raise ValueError(f"Invalid --set expression '{set_expr}'. Expected format: key=value")
         key, val = set_expr.split("=", 1)
         return key.strip(), val.strip()
+
+    @classmethod
+    def parse_json_or_relaxed(cls, raw_str: str) -> Dict[str, Any]:
+        """
+        Parses a JSON string with fallback handling for shells (such as Windows PowerShell)
+        that strip double quotes from arguments:
+            e.g. {external_docs_base_url: external\\doc\\base}
+        or single quotes:
+            e.g. {'external_docs_base_url': 'external/doc/base'}
+        """
+        raw_clean = raw_str.strip()
+        first_err = None
+
+        # 1. Standard JSON parse
+        try:
+            val = json.loads(raw_clean)
+            if isinstance(val, dict):
+                return val
+            raise ValueError(f"Expected JSON object, got {type(val).__name__}")
+        except Exception as json_err:
+            first_err = json_err
+
+        # 2. Python dict syntax (ast.literal_eval) e.g. {'include_table_m_code': False}
+        try:
+            val = ast.literal_eval(raw_clean)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+
+        # 3. PowerShell quote-stripped or unquoted keys/values e.g. {key: val, key2: "val2"}
+        if raw_clean.startswith("{") and raw_clean.endswith("}"):
+            inner = raw_clean[1:-1].strip()
+            result = {}
+            pair_pattern = re.compile(
+                r'([a-zA-Z0-9_\-\.\'\"]+)\s*:\s*(.*?)(?=(?:,\s*[a-zA-Z0-9_\-\.\'\"]+\s*:)|$)',
+                re.DOTALL
+            )
+            for match in pair_pattern.finditer(inner):
+                k = match.group(1).strip(" \"'")
+                v_raw = match.group(2).strip()
+                if v_raw.endswith(","):
+                    v_raw = v_raw[:-1].strip()
+
+                if (v_raw.startswith('"') and v_raw.endswith('"')) or (v_raw.startswith("'") and v_raw.endswith("'")):
+                    v = v_raw[1:-1]
+                elif v_raw.lower() == "true":
+                    v = True
+                elif v_raw.lower() == "false":
+                    v = False
+                elif v_raw.lower() in ("null", "none"):
+                    v = None
+                elif v_raw.isdigit():
+                    v = int(v_raw)
+                else:
+                    try:
+                        v = float(v_raw)
+                    except ValueError:
+                        v = v_raw
+                result[k] = v
+            if result:
+                return result
+
+        raise first_err
 
     @classmethod
     def get_template_dict(cls) -> Dict[str, Any]:
