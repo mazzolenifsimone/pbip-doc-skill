@@ -131,4 +131,4 @@ Each document type provides modular section toggles:
 **A**: Real-world semantic models can have hundreds or thousands of DAX measures. Grouping measures under `measures/<HostTable>/` avoids placing thousands of files in a single flat directory, making navigation cleaner for both humans and operating systems.
 
 ### Q: How can an agent override settings dynamically?
-**A**: In the MCP server, pass `config_overrides: {"include_table_m_code": false}`. In the CLI, pass `--config-json '{"include_table_m_code": false}'` or `--set include_table_m_code=false`.
+**A**: In the MCP server, pass `config_overrides: {"include_table_m_code": false}`. In the CLI, pass `--set include_table_m_code=false` or use a custom configuration file with `-c`.

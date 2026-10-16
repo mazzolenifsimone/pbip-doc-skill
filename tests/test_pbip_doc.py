@@ -1400,23 +1400,16 @@ class TestInheritedEntitiesAndExternalMeasures(unittest.TestCase):
 
         parser = argparse.ArgumentParser()
         parser.add_argument("-c", "--config")
-        parser.add_argument("--config-json")
         parser.add_argument("--set", action="append")
         parser.add_argument("--include-auto-tables", action="store_true")
         parser.add_argument("--include-inherited-entities", action="store_true")
         parser.add_argument("--exclude-tables")
 
-        # Test --config-json
-        args1 = parser.parse_args(["--config-json", '{"include_table_m_code": false, "tables_subdir": "custom_tbls"}'])
+        # Test --set
+        args1 = parser.parse_args(["--set", "include_table_m_code=false", "--set", "output_dir=ci_docs"])
         cfg1 = _load_cli_config(args1)
         self.assertFalse(cfg1.include_table_m_code)
-        self.assertEqual(cfg1.tables_subdir, "custom_tbls")
-
-        # Test --set
-        args2 = parser.parse_args(["--set", "include_table_m_code=false", "--set", "output_dir=ci_docs"])
-        cfg2 = _load_cli_config(args2)
-        self.assertFalse(cfg2.include_table_m_code)
-        self.assertEqual(cfg2.output_dir, "ci_docs")
+        self.assertEqual(cfg1.output_dir, "ci_docs")
 
     def test_mcp_server_config_overrides_and_get_configuration(self):
         from pbip_doc.mcp_server import PBIPMCPServer
@@ -2228,37 +2221,6 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         cfg_set = _load_cli_config(cli_args_set, None)
         self.assertEqual(cfg_set.base_doc_url, "https://portal.company.internal/docs")
         self.assertEqual(cfg_set.external_docs_base_url, "https://portal.company.internal/all")
-
-    def test_parse_json_or_relaxed(self):
-        # 1. Standard valid JSON
-        res1 = DocGenConfig.parse_json_or_relaxed('{"external_docs_base_url": "https://example.com"}')
-        self.assertEqual(res1, {"external_docs_base_url": "https://example.com"})
-
-        # 2. PowerShell quote-stripped argument: {key: value}
-        res2 = DocGenConfig.parse_json_or_relaxed(r"{external_docs_base_url: external\doc\base}")
-        self.assertEqual(res2, {"external_docs_base_url": r"external\doc\base"})
-
-        # 3. Multiple keys with booleans and numbers in quote-stripped format
-        res3 = DocGenConfig.parse_json_or_relaxed(
-            "{include_table_m_code: false, base_doc_url: https://docs.company.internal, retry_count: 5}"
-        )
-        self.assertEqual(res3, {
-            "include_table_m_code": False,
-            "base_doc_url": "https://docs.company.internal",
-            "retry_count": 5,
-        })
-
-        # 4. CLI with quote-stripped --config-json
-        import argparse
-        from pbip_doc.cli import _load_cli_config, _add_config_arguments
-
-        parser = argparse.ArgumentParser()
-        _add_config_arguments(parser)
-        cli_args = parser.parse_args([
-            "--config-json", r"{external_docs_base_url: external\doc\base}",
-        ])
-        cfg = _load_cli_config(cli_args, None)
-        self.assertEqual(cfg.external_docs_base_url, r"external\doc\base")
 
 
 if __name__ == "__main__":

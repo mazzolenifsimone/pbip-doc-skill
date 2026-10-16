@@ -49,14 +49,14 @@ When connected to the `pbip-doc-skill` MCP server, use the following tools direc
 
 ### Mode B: Terminal CLI Fallback
 
-If running in a standard shell without MCP tool bindings, execute the CLI entry points. You can pass arbitrary configuration overrides via `--config-json` or `--set key=value`:
+If running in a standard shell without MCP tool bindings, execute the CLI entry points. You can pass configuration overrides via `--set key=value`, a custom config file (`-c`), or dedicated flags:
 
 ```bash
 # 1. Quick model inspection (with inline config override)
 python -m pbip_doc.cli inspect path/to/definition --set include_inherited_entities=true
 
-# 2. Extract complete metadata JSON (with inline JSON config)
-python generate_json.py path/to/definition -o semantic_model_docs.json --config-json '{"exclude_auto_date_tables": false}'
+# 2. Extract complete metadata JSON (with inline config override)
+python generate_json.py path/to/definition -o semantic_model_docs.json --set exclude_auto_date_tables=false
 
 # 3. Generate modular Markdown documentation
 python generate_docs.py path/to/definition -o docs/ --set include_table_m_code=false

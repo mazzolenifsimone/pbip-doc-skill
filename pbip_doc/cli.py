@@ -15,7 +15,7 @@ from .docgen import DocGenConfig, MarkdownDocGenerator
 
 
 def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
-    """Helper to resolve DocGenConfig from --config, --config-json, --set, local pbip_doc.config.json or defaults."""
+    """Helper to resolve DocGenConfig from --config, --set, local pbip_doc.config.json or defaults."""
     config_file = getattr(args, "config", None)
     if config_file and os.path.exists(config_file):
         config = DocGenConfig.load_from_file(config_file)
@@ -26,20 +26,7 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
         else:
             config = DocGenConfig.find_and_load_default()
 
-    # 1. Inline JSON override via --config-json
-    config_json_raw = getattr(args, "config_json", None)
-    if config_json_raw:
-        try:
-            overrides = DocGenConfig.parse_json_or_relaxed(config_json_raw)
-            if isinstance(overrides, dict):
-                config.apply_overrides(overrides)
-            else:
-                print(f"[WARNING] --config-json must be a JSON object, got {type(overrides).__name__}.", file=sys.stderr)
-        except Exception as e:
-            print(f"[ERROR] Invalid JSON passed to --config-json: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    # 2. Key=Value overrides via --set (supports multiple occurrences)
+    # 1. Key=Value overrides via --set (supports multiple occurrences)
     set_args = getattr(args, "set", None)
     if set_args:
         for item in set_args:
@@ -77,14 +64,10 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
 
 
 def _add_config_arguments(p: argparse.ArgumentParser):
-    """Adds common configuration flags (--config, --config-json, --set, --print-config, URL flags) to a parser."""
+    """Adds common configuration flags (--config, --set, --print-config, URL flags) to a parser."""
     p.add_argument(
         "-c", "--config",
         help="Path to custom JSON configuration file (e.g. pbip_doc.config.json)",
-    )
-    p.add_argument(
-        "--config-json",
-        help="Inline JSON string with configuration overrides (e.g. '{\"include_table_m_code\": false}')",
     )
     p.add_argument(
         "--set",
@@ -235,7 +218,7 @@ def main():
     config_parser.add_argument(
         "--show",
         action="store_true",
-        help="Print the effective configuration JSON to stdout (incorporating --config, --config-json, and --set)",
+        help="Print the effective configuration JSON to stdout (incorporating --config and --set)",
     )
     config_parser.add_argument(
         "--force",

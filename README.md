@@ -189,20 +189,17 @@ python generate_docs.py config --show --set output_dir=my_docs --set include_tab
 
 ### 2. Passing Configurations from the Command Line
 
-You have three flexible methods to configure runs:
+You have flexible methods to configure runs:
 
 - **Config File (`-c, --config`)**:
   ```bash
   python generate_docs.py path/to/model -c pbip_doc.config.json
   ```
-- **Inline JSON (`--config-json`)**:
-  ```bash
-  python generate_docs.py path/to/model --config-json '{"include_table_m_code": false, "exclude_auto_date_tables": false}'
-  ```
 - **Key-Value Overrides (`--set KEY=VALUE`)**:
   ```bash
   python generate_docs.py path/to/model --set include_table_m_code=false --set output_dir=custom_docs
   ```
+- **Dedicated CLI Flags**: `--base-doc-url`, `--external-docs-base-url`, `--external-doc-path`, `--exclude-tables`, `--include-auto-tables`, etc.
 - **Debug Inspection (`--print-config`)**: prints the resolved configuration before running.
 
 ### 3. Example `pbip_doc.config.json`
