@@ -242,9 +242,9 @@ You have three flexible methods to configure runs:
 - `--include-inherited-entities`: include and publish standalone documentation files for inherited tables (`partition = entity`) and external measures (`EXTERNALMEASURE`).
 - `--no-frontmatter`: omit YAML frontmatter at top of markdown files.
 - `--no-m-code`: omit raw M code snippets from table documents.
-- `--base-doc-url <URL>` / `--base-doc-path <PATH>`: set the base URL or absolute path for the documentation currently being generated (e.g. `https://company.sharepoint.com/sites/bi/docs/SalesModel` or `C:/Docs/SalesModel`). Replaces relative links with absolute links across all Markdown pages.
+- `--base-doc-url <URL>` / `--base-doc-path <PATH>`: set the base URL or absolute path for the documentation currently being generated (e.g. `https://docs.company.internal/bi/SalesModel` or `/mnt/docs/SalesModel`). Replaces relative links with absolute links across all Markdown pages.
 - `--external-docs-base-url <URL>` / `--external-docs-base-path <PATH>`: set the base URL or shared folder containing documentation for all external models (organized as `<url>/<model_name>/tables/...`).
-- `--external-doc-path NAME=URL`: set documentation absolute path for a specific external reference by name (can be repeated, e.g. `--external-doc-path CentralDataModel=https://company.sharepoint.com/sites/bi/docs/CentralDataModel`).
+- `--external-doc-path NAME=URL`: set documentation absolute path for a specific external reference by name (can be repeated, e.g. `--external-doc-path CentralDataModel=https://docs.company.internal/bi/CentralDataModel`).
 
 ---
 
@@ -301,7 +301,7 @@ In architectures using a central **Golden Dataset** with multiple thin reports (
   - **Active External Links (`external_docs_base_url` & `external_doc_paths`)**: when external documentation paths are configured, the generator automatically creates clickable links to the external model's documentation:
     - Tables: `<external_path>/tables/<TableName>.md`
     - Measures: `<external_path>/measures/<HomeTable>/<MeasureName>.md`
-    - Links work seamlessly across SharePoint sites, OneDrive, local drives, and intranet portals.
+    - Links work seamlessly across internal portals, documentation servers, shared network storage, and cloud drives.
   - **Full Inclusion (`include_inherited_entities: true`)**: set this flag in the config file or via CLI to generate standalone pages for inherited entities within the current documentation suite as well.
 
 ---

@@ -101,7 +101,7 @@ def _add_config_arguments(p: argparse.ArgumentParser):
         "--base-doc-url", "--base-doc-path",
         dest="base_doc_url",
         default=None,
-        help="Base URL or absolute path for the documentation currently being generated (e.g. SharePoint, OneDrive, or web portal root).",
+        help="Base URL or absolute path for the documentation currently being generated (e.g. web portal, intranet wiki, or documentation server root).",
     )
     p.add_argument(
         "--external-docs-base-url", "--external-docs-base-path",
@@ -113,7 +113,7 @@ def _add_config_arguments(p: argparse.ArgumentParser):
         "--external-doc-path",
         action="append",
         metavar="NAME=URL",
-        help="Set documentation absolute path for a specific external reference by name (e.g. --external-doc-path CentralDataModel=https://sharepoint.../CentralDataModel). Can be repeated.",
+        help="Set documentation absolute path for a specific external reference by name (e.g. --external-doc-path CentralDataModel=https://docs.company.internal/CentralDataModel). Can be repeated.",
     )
 
 

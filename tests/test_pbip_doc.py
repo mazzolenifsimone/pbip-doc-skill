@@ -2096,7 +2096,7 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
             "data_sources_summary": [],
         }
 
-        base_url = "https://sharepoint.com/teams/bi/docs"
+        base_url = "https://docs.company.internal/teams/bi/docs"
         cfg = DocGenConfig(base_doc_url=base_url)
         generator = MarkdownDocGenerator(config=cfg)
         docs = generator.generate_all_documents(sample_model)
@@ -2167,21 +2167,21 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
 
         # Case 1: External doc URL configured
         cfg_with_ext = DocGenConfig(
-            external_docs_base_url="https://sharepoint.com/models",
+            external_docs_base_url="https://docs.company.internal/models",
         )
         gen1 = MarkdownDocGenerator(config=cfg_with_ext)
         docs1 = gen1.generate_all_documents(sample_model)
 
         fact_doc1 = docs1["tables/FactSales.md"]
         # Connected dimension should now have a link to external doc!
-        self.assertIn("[DimCustomer](https://sharepoint.com/models/CentralDataModel/tables/DimCustomer.md)", fact_doc1)
+        self.assertIn("[DimCustomer](https://docs.company.internal/models/CentralDataModel/tables/DimCustomer.md)", fact_doc1)
 
         margin_doc1 = docs1["measures/FactSales/Margin.md"]
         # Direct dependency RemoteCost should now have link to external doc!
-        self.assertIn("[RemoteCost](https://sharepoint.com/models/CentralDataModel/measures/DimCustomer/RemoteCost.md)", margin_doc1)
+        self.assertIn("[RemoteCost](https://docs.company.internal/models/CentralDataModel/measures/DimCustomer/RemoteCost.md)", margin_doc1)
 
         index_doc1 = docs1["INDEX.md"]
-        self.assertIn("[`[RemoteCost]`](https://sharepoint.com/models/CentralDataModel/measures/DimCustomer/RemoteCost.md) *(External)*", index_doc1)
+        self.assertIn("[`[RemoteCost]`](https://docs.company.internal/models/CentralDataModel/measures/DimCustomer/RemoteCost.md) *(External)*", index_doc1)
 
         # Case 2: NO external doc URL configured -> retains current fallback message without link
         cfg_no_ext = DocGenConfig()
@@ -2208,26 +2208,26 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
 
         # Test CLI flags parsing
         cli_args = parser.parse_args([
-            "--base-doc-url", "https://sharepoint.com/sites/bi/current_model",
-            "--external-docs-base-url", "https://sharepoint.com/sites/bi/external_models",
-            "--external-doc-path", "CentralDataModel=https://sharepoint.com/sites/bi/central",
-            "--external-doc-path", "SalesCube=https://sharepoint.com/sites/bi/sales_cube",
+            "--base-doc-url", "https://docs.company.internal/sites/bi/current_model",
+            "--external-docs-base-url", "https://docs.company.internal/sites/bi/external_models",
+            "--external-doc-path", "CentralDataModel=https://docs.company.internal/sites/bi/central",
+            "--external-doc-path", "SalesCube=https://docs.company.internal/sites/bi/sales_cube",
         ])
 
         cfg = _load_cli_config(cli_args, None)
-        self.assertEqual(cfg.base_doc_url, "https://sharepoint.com/sites/bi/current_model")
-        self.assertEqual(cfg.external_docs_base_url, "https://sharepoint.com/sites/bi/external_models")
-        self.assertEqual(cfg.external_doc_paths.get("CentralDataModel"), "https://sharepoint.com/sites/bi/central")
-        self.assertEqual(cfg.external_doc_paths.get("SalesCube"), "https://sharepoint.com/sites/bi/sales_cube")
+        self.assertEqual(cfg.base_doc_url, "https://docs.company.internal/sites/bi/current_model")
+        self.assertEqual(cfg.external_docs_base_url, "https://docs.company.internal/sites/bi/external_models")
+        self.assertEqual(cfg.external_doc_paths.get("CentralDataModel"), "https://docs.company.internal/sites/bi/central")
+        self.assertEqual(cfg.external_doc_paths.get("SalesCube"), "https://docs.company.internal/sites/bi/sales_cube")
 
         # Test --set with base_doc_path alias
         cli_args_set = parser.parse_args([
-            "--set", "base_doc_path=https://sp/portal",
-            "--set", "external_docs_base_path=https://sp/all",
+            "--set", "base_doc_path=https://portal.company.internal/docs",
+            "--set", "external_docs_base_path=https://portal.company.internal/all",
         ])
         cfg_set = _load_cli_config(cli_args_set, None)
-        self.assertEqual(cfg_set.base_doc_url, "https://sp/portal")
-        self.assertEqual(cfg_set.external_docs_base_url, "https://sp/all")
+        self.assertEqual(cfg_set.base_doc_url, "https://portal.company.internal/docs")
+        self.assertEqual(cfg_set.external_docs_base_url, "https://portal.company.internal/all")
 
 
 if __name__ == "__main__":

@@ -428,7 +428,7 @@ class DocGenConfig:
             "generate_index_file": "Generate master INDEX.md catalog.",
             "sanitize_filenames": "Sanitize special characters in generated markdown filenames.",
             "include_markdown_links": "Render cross-links between measures and tables in generated markdown.",
-            "base_doc_url": "Base URL or absolute path for the documentation currently being generated (e.g. SharePoint, OneDrive, or web portal root).",
+            "base_doc_url": "Base URL or absolute path for the documentation currently being generated (e.g. web portal, intranet wiki, or documentation server root).",
             "external_docs_base_url": "Base URL or directory path containing documentation for all external models (organized as <external_docs_base_url>/<model_name>/).",
             "external_doc_paths": "Dictionary mapping specific external reference/model names to their absolute documentation base URLs/paths.",
         }

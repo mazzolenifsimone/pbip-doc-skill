@@ -61,11 +61,11 @@ python generate_json.py path/to/definition -o semantic_model_docs.json --config-
 # 3. Generate modular Markdown documentation
 python generate_docs.py path/to/definition -o docs/ --set include_table_m_code=false
 
-# 4. Generate documentation with SharePoint / OneDrive absolute URLs
+# 4. Generate documentation with web portal or absolute URLs
 python generate_docs.py path/to/definition -o docs/ \
-  --base-doc-url "https://company.sharepoint.com/sites/bi/docs/CurrentModel" \
-  --external-docs-base-url "https://company.sharepoint.com/sites/bi/docs/ExternalModels" \
-  --external-doc-path "CentralDataModel=https://company.sharepoint.com/sites/bi/docs/CentralDataModel"
+  --base-doc-url "https://docs.company.internal/bi/CurrentModel" \
+  --external-docs-base-url "https://docs.company.internal/bi/ExternalModels" \
+  --external-doc-path "CentralDataModel=https://docs.company.internal/bi/CentralDataModel"
 
 # 5. Initialize a complete configuration template file
 python generate_docs.py config --init pbip_doc.config.json
@@ -148,10 +148,10 @@ In Power BI architectures using a centralized golden dataset and thin reports co
   - They remain present in global JSON indexes, relationship graphs, and DAG dependencies so the model graph remains intact.
   - They are excluded from generating standalone markdown documentation files unless `include_inherited_entities: true` is configured.
   - **External Links Resolution**:
-    - When `external_docs_base_url` or `external_doc_paths` are set, the generator produces active Markdown links targeting external documentation (e.g. `[RemoteMeasure](https://sharepoint.../measures/Customer/RemoteMeasure.md)`).
+    - When `external_docs_base_url` or `external_doc_paths` are set, the generator produces active Markdown links targeting external documentation (e.g. `[RemoteMeasure](https://docs.company.internal/bi/models/measures/Customer/RemoteMeasure.md)`).
     - If no external path is configured, it falls back cleanly to static badges (`*(Inherited Entity)*`, `*(External Measure)*`) without broken links.
   - **Absolute Base URL**:
-    - Setting `base_doc_url` ensures all local and external cross-links use absolute URLs (essential for SharePoint, OneDrive, and corporate wikis).
+    - Setting `base_doc_url` ensures all local and external cross-links use absolute URLs (essential for web portals, corporate wikis, intranets, and remote documentation servers).
 
 ### DAX Measure DAG and Calculation Depth
 
