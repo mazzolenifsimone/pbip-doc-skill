@@ -9,7 +9,7 @@ from .measure_doc import MeasureDocBuilder
 from .function_doc import FunctionDocBuilder
 from .expression_doc import ExpressionDocBuilder
 from .index_doc import IndexDocBuilder
-from .visual_doc import PageVisualDocBuilder
+from .visual_doc import PageVisualDocBuilder, VisualDocLabels
 from .engine import MarkdownDocGenerator
 
 __all__ = [
@@ -20,5 +20,7 @@ __all__ = [
     "ExpressionDocBuilder",
     "IndexDocBuilder",
     "PageVisualDocBuilder",
+    "VisualDocLabels",
     "MarkdownDocGenerator",
 ]
+

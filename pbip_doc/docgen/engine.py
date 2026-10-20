@@ -123,6 +123,13 @@ class MarkdownDocGenerator:
                 doc_path = f"{visuals_sub}/{page_filename}" if visuals_sub else page_filename
                 documents[doc_path] = page_builder.build_markdown()
 
+                # Generate and collect scaled SVG canvas mini-maps
+                if self.config.include_visual_svg_maps:
+                    svg_assets = page_builder.build_svg_assets()
+                    for asset_rel_path, svg_content in svg_assets.items():
+                        asset_doc_path = f"{visuals_sub}/{asset_rel_path}" if visuals_sub else asset_rel_path
+                        documents[asset_doc_path] = svg_content
+
         return documents
 
     def write_to_directory(self, model_data: Union[Dict[str, Any], str, Path], target_dir: Optional[str] = None) -> Dict[str, str]:

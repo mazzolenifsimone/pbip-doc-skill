@@ -70,7 +70,9 @@ class DocGenConfig:
     # Visual / Report documentation modular sections
     include_visual_docs: bool = True
     include_visual_yaml_frontmatter: bool = True
+    include_visual_svg_maps: bool = True
     visuals_subdir: str = "visuals"
+    visual_assets_subdir: str = "assets"
     report_path: Optional[str] = None
 
     # General options
@@ -114,6 +116,18 @@ class DocGenConfig:
         if tbl_sub:
             return f"../{tbl_sub}/{clean_tbl}.md"
         return f"../{clean_tbl}.md"
+
+    def resolve_visual_svg_url(self, page_name: str, visual_id: str) -> str:
+        """Computes relative or absolute URL to a visual SVG map from a page visual doc."""
+        clean_page = sanitize_filename(page_name)
+        clean_vid = sanitize_filename(visual_id)
+        assets_sub = self.visual_assets_subdir.strip("/\\")
+        if self.base_doc_url:
+            vis_sub = self.visuals_subdir.strip("/\\")
+            if vis_sub:
+                return join_doc_path(self.base_doc_url, vis_sub, assets_sub, clean_page, f"{clean_vid}.svg") if assets_sub else join_doc_path(self.base_doc_url, vis_sub, clean_page, f"{clean_vid}.svg")
+            return join_doc_path(self.base_doc_url, assets_sub, clean_page, f"{clean_vid}.svg") if assets_sub else join_doc_path(self.base_doc_url, clean_page, f"{clean_vid}.svg")
+        return f"{assets_sub}/{clean_page}/{clean_vid}.svg" if assets_sub else f"{clean_page}/{clean_vid}.svg"
 
     def is_table_excluded(self, table_name: Optional[str]) -> bool:
         """
@@ -507,7 +521,9 @@ class DocGenConfig:
             "include_expression_rag_hints": "Include contextual RAG hints in expression docs.",
             "include_visual_docs": "Generate documentation for report pages, canvas filter contexts, and dynamic visuals.",
             "include_visual_yaml_frontmatter": "Include structured YAML frontmatter at top of visual / page docs.",
+            "include_visual_svg_maps": "Generate scaled SVG canvas mini-maps for visual documentation.",
             "visuals_subdir": "Subdirectory name for report page / visual documentation pages.",
+            "visual_assets_subdir": "Subdirectory name for visual SVG mini-map assets (default: assets).",
             "report_path": "Path to associated *.Report directory (if not automatically discovered alongside the semantic model).",
             "output_dir": "Target directory where documentation files are written.",
             "tables_subdir": "Subdirectory name for table documentation pages.",

@@ -71,12 +71,22 @@ Deconstructs the 3 foundational filter sources:
 - **Canvas Slicers**: Interactive slicer controls placed on the canvas and their default state.
 
 ### 4. Dynamic Visuals Catalog (In-Scope)
-Sorted in natural reading order (Top-to-Bottom, Left-to-Right):
-- **Visual Title & Type**: User-defined title (or synthesized title) with visual type badge.
-- **Spatial Position**: Center coordinates `(center_x, center_y)` and screen quadrant zone (`Top-Left`, `Middle-Right`, `Bottom-Center`, etc.) + bounding box.
-- **Evaluated Metric(s)**: Measures with clickable links to their dedicated markdown documents (`[Sales[Cost]](../measures/Sales/Cost.md)`).
-- **Slicing Coordinate(s)**: Categorical fields defining axes, rows, or columns with links to table dictionaries (`[Product](../tables/Product.md)`).
-- **Visual Active Filter(s)**: Visual-level filters such as Top N, exclusions, or comparison conditions.
+Sorted in natural reading order (Top-to-Bottom, Left-to-Right). When `include_visual_svg_maps` is enabled (default), dynamic visuals are presented in a 2-column side-by-side table layout:
+
+| Canvas Location | Technical Specifications, Metrics & Filter Perimeter |
+| :---: | :--- |
+| `<div style="min-width: 260px; max-width: 380px;"><img src="assets/<Page>/<Visual_Id>.svg" width="100%" /></div>` | **Visual Type**: `barChart` &nbsp; *(Visible - Solid Border)*<br>**Visual ID**: `01af2f16...`<br>**Indicative Position**: `Center-Left`<br><br>**Evaluated DAX Metric(s)**:<br>• [Sales[Revenue]](../measures/Sales/Revenue.md) *(Role: Y)*<br><br>**Slicing Dimension(s) (Axis / Row Context)**:<br>• [Product](../tables/Product.md) ➔ `Category` *(Role: Category)*<br><br>**Applicable Filter Perimeter**:<br>• **Locked Page Filter(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Status](../tables/Status.md) ➔ `Active` In (`Won`) *(Hard constraint)*<br>• **Interactive Page Filter(s) (Panel)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Date](../tables/Date.md) ➔ `Year` (Default: `All (No filter applied)`)<br>• **Canvas Page Slicer(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Calendar](../tables/Calendar.md) ➔ `Date` (Default: `All`)<br>• **Visual-Level Filter(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Product](../tables/Product.md) ➔ `Category`: `In (Bikes)` *(Type: Categorical)* |
+
+#### Scaled SVG Canvas Mini-Map Specifications:
+- **Canvas Viewport**: Exact aspect ratio (`viewBox="0 0 page_width page_height"`), square corners (`rx="0" ry="0"`), and dark gray canvas border (`#334155`).
+- **3x3 Reference Grid**: Dashed dark gray reference guidelines (`#64748b`, `stroke-dasharray="8,8"`) dividing the canvas into standard quadrants.
+- **Visual Bounding Box**: Scaled square rectangle with dark gray border (`#334155`), solid line for visible visuals and dashed line (`stroke-dasharray="16,10"`) for hidden visual elements.
+- **Visual Fill**: Dark gray (`#334155`) with **80% transparency** (`fill-opacity="0.20"`), allowing underlying grid lines to remain clearly visible.
+- **Center Marker**: Crisp geometric black "X" (`#000000`, `stroke-width="4"`, `stroke-linecap="square"`).
+- **Clean Aesthetic**: No dimensional badges cluttering the graphic; spatial coordinates are abstracted into standard indicative positions (`Top-Left`, `Center`, `Bottom-Right`, etc.) rather than repeated in text.
+
+#### Abstracted Documentation Labels (`VisualDocLabels`):
+All table column headers, status badges, bullet point titles, and filter categories are centralized in the `VisualDocLabels` class. This ensures strict English consistency, clean semantic RAG indexing, and seamless switching between the 2-column SVG layout and the text-only bullet list fallback mode.
 
 ### 5. Omitted Static Elements Summary
 Reports the exact count of decorative shapes, background lines, static textboxes, and fixed images excluded from the catalog to maintain clean documentation.
@@ -85,13 +95,16 @@ Reports the exact count of decorative shapes, background lines, static textboxes
 
 ## ⚙️ CLI Flags & Configuration
 
-Visual documentation is **enabled by default** and automatically discovers the sibling `*.Report` folder alongside the semantic model.
+Visual documentation and scaled SVG canvas mini-maps are **enabled by default** and automatically discover sibling `*.Report` folders alongside the semantic model.
 
 To disable or customize visual documentation via CLI:
 
 ```bash
 # Disable visuals generation entirely
 python generate_docs.py "samples/AdventureWorks Sales" --no-visuals
+
+# Disable SVG canvas mini-maps (generates text-only visual catalogs)
+python generate_docs.py "samples/AdventureWorks Sales" --no-visual-svg-maps
 
 # Customize visuals output folder
 python generate_docs.py "samples/AdventureWorks Sales" --visuals-dir "report_pages"
@@ -106,7 +119,10 @@ In `pbip_doc.config.json`:
 {
   "include_visual_docs": true,
   "include_visual_yaml_frontmatter": true,
+  "include_visual_svg_maps": true,
   "visuals_subdir": "visuals",
+  "visual_assets_subdir": "assets",
   "report_path": null
 }
 ```
+

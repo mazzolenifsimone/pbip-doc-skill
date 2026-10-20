@@ -8,6 +8,7 @@ import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from ..dax_formatter import format_dax
 
 
 class MeasureDocBuilder:
@@ -202,14 +203,16 @@ class MeasureDocBuilder:
 
     def _build_dax_chapter(self) -> str:
         """DAX Expression."""
-        dax_clean = self.dax.strip() if self.dax else "-- No DAX expression provided"
-        if dax_clean.startswith("```"):
-            dax_clean = re.sub(r'^```[a-zA-Z]*\r?\n?', '', dax_clean)
-            dax_clean = re.sub(r'\r?\n?\s*```\s*$', '', dax_clean).strip()
+        dax_formatted = format_dax(
+            self.dax,
+            name=self.name,
+            entity_type="measure",
+            table_name=self.table,
+        )
         return "\n".join([
             "## DAX Formula",
             "```dax",
-            dax_clean,
+            dax_formatted,
             "```",
         ])
 

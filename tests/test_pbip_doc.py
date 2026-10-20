@@ -78,7 +78,8 @@ class TestMarkdownDocGenerator(unittest.TestCase):
         self.assertIn("doc_type: dax_measure", measure_doc)
         self.assertIn("calculation_depth: 0", measure_doc)
         self.assertIn("```dax", measure_doc)
-        self.assertIn("SUM(FactOrders[Amount])", measure_doc)
+        self.assertIn("[Total Sales] =", measure_doc)
+        self.assertIn("SUM ( FactOrders[Amount] )", measure_doc)
         self.assertIn("## Semantic Context for AI & RAG", measure_doc)
 
 
@@ -1697,7 +1698,8 @@ class TestCalculatedTables(unittest.TestCase):
         self.assertIn("🧮 **DAX Calculated Table**", tbl_doc)
         self.assertIn("## DAX Table Expression & Lineage", tbl_doc)
         self.assertIn("```dax", tbl_doc)
-        self.assertIn("CALENDAR(DATE(2020, 1, 1), DATE(2025, 12, 31))", tbl_doc)
+        self.assertIn("'DimDate' =", tbl_doc)
+        self.assertIn("CALENDAR ( DATE ( 2020, 1, 1 ), DATE ( 2025, 12, 31 ) )", tbl_doc)
         self.assertIn("In-Memory Calculated Table", tbl_doc)
 
     def test_parse_tmdl_calculated_partition_with_triple_backticks(self):

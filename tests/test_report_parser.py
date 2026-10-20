@@ -767,7 +767,7 @@ class TestReportVisualDocgen(unittest.TestCase):
         self.assertIn("[Sales[Cost]](measures/Sales/Cost.md)", md)
 
     def test_markdown_doc_generator_with_sibling_report(self):
-        from pbip_doc.docgen import MarkdownDocGenerator, DocGenConfig
+        from pbip_doc.docgen import MarkdownDocGenerator, DocGenConfig, VisualDocLabels
 
         # Setup synthetic PBIP root with .SemanticModel and .Report
         pbip_root = self.root / "AdventureWorks"
@@ -827,7 +827,7 @@ class TestReportVisualDocgen(unittest.TestCase):
         with open(pages_dir / "visual.json", "w", encoding="utf-8") as f:
             json.dump(v_json, f)
 
-        # 1. Test standard generation (with visual docs auto-discovered)
+        # 1. Test standard generation (with visual docs and SVG maps auto-discovered)
         cfg = DocGenConfig()
         gen = MarkdownDocGenerator(cfg)
         docs = gen.generate_all_documents(pbip_root)
@@ -836,7 +836,15 @@ class TestReportVisualDocgen(unittest.TestCase):
         self.assertIn("tables/Sales.md", docs)
         self.assertIn("measures/Sales/Cost.md", docs)
         self.assertIn("visuals/Overview.md", docs)
+        self.assertIn("visuals/assets/Overview/v1.svg", docs)
         self.assertIn("## Report Presentation & Visuals: `AdventureWorks`", docs["INDEX.md"])
+
+        # Check visual markdown contains side-by-side table, img tag, indicative position, filter perimeter
+        overview_md = docs["visuals/Overview.md"]
+        self.assertIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} | {VisualDocLabels.COL_SPECS_METRICS_PERIMETER} |", overview_md)
+        self.assertIn('<img src="assets/Overview/v1.svg"', overview_md)
+        self.assertIn("**Indicative Position**:", overview_md)
+        self.assertIn("**Applicable Filter Perimeter**:", overview_md)
 
         # 2. Test generation with include_visual_docs=False
         cfg_novis = DocGenConfig(include_visual_docs=False)
@@ -845,9 +853,99 @@ class TestReportVisualDocgen(unittest.TestCase):
 
         self.assertIn("INDEX.md", docs_novis)
         self.assertNotIn("visuals/Overview.md", docs_novis)
+        self.assertNotIn("visuals/assets/Overview/v1.svg", docs_novis)
         self.assertNotIn("## Report Presentation & Visuals", docs_novis["INDEX.md"])
+
+    def test_visual_svg_map_specifications(self):
+        """Tests that generated SVG mini-maps comply with dark gray, 80% transparency, and square corner specs."""
+        from pbip_doc.docgen.visual_doc import PageVisualDocBuilder
+        from pbip_doc.docgen.config import DocGenConfig
+
+        report = self._create_mock_report_model()
+        page = report.pages[0]
+        config = DocGenConfig()
+
+        builder = PageVisualDocBuilder(
+            page=page,
+            report_model=report,
+            config=config,
+        )
+
+        # Test visible visual SVG
+        v_vis = page.visuals[0]
+        v_vis.is_hidden = False
+        svg_vis = builder.generate_visual_svg(v_vis)
+
+        # Dark gray borders (#334155), dashed grid lines (#64748b)
+        self.assertIn('stroke="#334155"', svg_vis)
+        self.assertIn('stroke="#64748b"', svg_vis)
+        # Visual fill with 80% transparency (20% opacity)
+        self.assertIn('fill-opacity="0.20"', svg_vis)
+        # Center marker: Black X (#000000)
+        self.assertIn('stroke="#000000"', svg_vis)
+        self.assertIn('stroke-linecap="square"', svg_vis)
+        # Solid border for visible visual
+        self.assertNotIn('stroke-dasharray="16,10"', svg_vis)
+        # No dimension badge in SVG
+        self.assertNotIn("1920 × 1080", svg_vis)
+
+        # Test hidden visual SVG
+        v_vis.is_hidden = True
+        svg_hid = builder.generate_visual_svg(v_vis)
+        self.assertIn('stroke-dasharray="16,10"', svg_hid)
+
+        # Test build_svg_assets returns all dynamic visual SVGs
+        assets = builder.build_svg_assets()
+        self.assertEqual(len(assets), 2)
+        self.assertTrue(any(k.endswith(".svg") for k in assets.keys()))
+
+    def test_visual_doc_labels_abstraction_and_text_fallback(self):
+        """Tests that VisualDocLabels are centralized and used consistently in both table mode and text list fallback mode."""
+        from pbip_doc.docgen.visual_doc import PageVisualDocBuilder, VisualDocLabels
+        from pbip_doc.docgen.config import DocGenConfig
+
+        report = self._create_mock_report_model()
+        page = report.pages[0]
+
+        # 1. Mode with SVG Maps (2-column side-by-side table)
+        cfg_table = DocGenConfig(include_visual_svg_maps=True)
+        builder_table = PageVisualDocBuilder(page=page, report_model=report, config=cfg_table)
+        md_table = builder_table.build_markdown()
+
+        # Check table headers and column labels from VisualDocLabels
+        self.assertIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} | {VisualDocLabels.COL_SPECS_METRICS_PERIMETER} |", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_VISUAL_TYPE}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_INDICATIVE_POSITION}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_EVALUATED_METRICS}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_SLICING_DIMENSIONS}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_FILTER_PERIMETER}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_LOCKED_PAGE_FILTERS}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_INTERACTIVE_PAGE_FILTERS}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_CANVAS_PAGE_SLICERS}**:", md_table)
+        self.assertIn(f"**{VisualDocLabels.LABEL_VISUAL_LEVEL_FILTERS}**:", md_table)
+        self.assertIn(VisualDocLabels.BADGE_VISIBLE, md_table)
+        self.assertIn(VisualDocLabels.BADGE_HARD_CONSTRAINT, md_table)
+
+        # 2. Mode without SVG Maps (Standard Markdown bullet list fallback)
+        cfg_text = DocGenConfig(include_visual_svg_maps=False)
+        builder_text = PageVisualDocBuilder(page=page, report_model=report, config=cfg_text)
+        md_text = builder_text.build_markdown()
+
+        # Check bullet list structure
+        self.assertNotIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} |", md_text)
+        self.assertNotIn("<img src=", md_text)
+        self.assertIn(f"- **{VisualDocLabels.LABEL_VISUAL_TYPE}**:", md_text)
+        self.assertIn(f"- **{VisualDocLabels.LABEL_INDICATIVE_POSITION}**:", md_text)
+        self.assertIn(f"- **{VisualDocLabels.LABEL_EVALUATED_METRICS}**:", md_text)
+        self.assertIn(f"- **{VisualDocLabels.LABEL_SLICING_DIMENSIONS}**:", md_text)
+        self.assertIn(f"- **{VisualDocLabels.LABEL_FILTER_PERIMETER}**:", md_text)
+        self.assertIn(f"  - **{VisualDocLabels.LABEL_LOCKED_PAGE_FILTERS}**:", md_text)
+        self.assertIn(f"  - **{VisualDocLabels.LABEL_INTERACTIVE_PAGE_FILTERS}**:", md_text)
+        self.assertIn(f"  - **{VisualDocLabels.LABEL_CANVAS_PAGE_SLICERS}**:", md_text)
+        self.assertIn(f"  - **{VisualDocLabels.LABEL_VISUAL_LEVEL_FILTERS}**:", md_text)
 
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -60,10 +60,10 @@ Displays the measure name, format string (e.g. `#,##0.00` or `0.0%`), descriptio
 - **Calculation Role**: Base Measure (Depth 0) vs. Derived KPI (Depth 1+).
 
 ### 2. DAX Formula Block
-Renders the complete DAX calculation formatted in a highlighted code block:
+Renders the complete DAX calculation formatted with standard formatting conventions (uppercase keywords, 4-space indentation, comments stripped, canonical entity header):
 
 ```dax
-Margin % = 
+[Margin %] =
 DIVIDE (
     [Gross Margin],
     [Total Sales],

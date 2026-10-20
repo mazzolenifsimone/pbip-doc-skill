@@ -23,6 +23,59 @@ from ..report_schema import (
 )
 
 
+
+class VisualDocLabels:
+    """
+    Centralized technical documentation labels and terminology for report pages and visuals.
+    Maintains rigorous consistency across Markdown catalogs, tables, and AI-RAG metadata.
+    """
+    # Table column headers
+    COL_CANVAS_LOCATION = "Canvas Location"
+    COL_SPECS_METRICS_PERIMETER = "Technical Specifications, Metrics & Filter Perimeter"
+    COL_TARGET_TABLE = "Target Table"
+
+    COL_TARGET_FIELD = "Target Field"
+    COL_OPERATOR = "Operator"
+    COL_APPLIED_VALUES = "Applied Value(s)"
+    COL_DEFAULT_SELECTION = "Default Selection / Value"
+    COL_SLICER_CONTROL = "Slicer Control"
+    COL_DEFAULT_STATE = "Default State"
+    COL_SYNCED = "Synced Across Pages"
+
+    # Visual specification bullet labels
+    LABEL_VISUAL_TYPE = "Visual Type"
+    LABEL_VISUAL_ID = "Visual ID"
+    LABEL_INDICATIVE_POSITION = "Indicative Position"
+    LABEL_EVALUATED_METRICS = "Evaluated DAX Metric(s)"
+    LABEL_SLICING_DIMENSIONS = "Slicing Dimension(s) (Axis / Row Context)"
+    LABEL_FILTER_PERIMETER = "Applicable Filter Perimeter"
+    LABEL_LOCKED_PAGE_FILTERS = "Locked Page Filter(s)"
+    LABEL_INTERACTIVE_PAGE_FILTERS = "Interactive Page Filter(s) (Panel)"
+    LABEL_CANVAS_PAGE_SLICERS = "Canvas Page Slicer(s)"
+    LABEL_VISUAL_LEVEL_FILTERS = "Visual-Level Filter(s)"
+
+    # Status badges and modifiers
+    BADGE_VISIBLE = "*(Visible - Solid Border)*"
+    BADGE_HIDDEN = "*(Hidden - Dashed Border)*"
+    BADGE_SLICER_CONTROL = "*(Slicer Control)*"
+    BADGE_HARD_CONSTRAINT = "*(Hard constraint)*"
+    ROLE_PREFIX = "Role"
+    TYPE_PREFIX = "Type"
+    DEFAULT_PREFIX = "Default"
+    AGGREGATION_PREFIX = "Aggregation"
+
+    # Placeholders & fallbacks
+    VALUE_NONE = "*None*"
+    VALUE_NONE_STRUCTURAL = "*None (Structural/Slicer visual)*"
+    VALUE_ALL_DEFAULT = "All (No filter applied)"
+
+    # Section callouts & notes
+    MSG_NO_LOCKED_FILTERS = "> ℹ️ *No locked active filters constraining this page.*"
+    MSG_NO_UNLOCKED_FILTERS = "> ℹ️ *No unlocked filters present in the page filter panel.*"
+    MSG_NO_SLICERS = "> ℹ️ *No canvas slicer controls present on this page.*"
+    MSG_NO_DYNAMIC_VISUALS = "> ℹ️ *No dynamic visuals with metric evaluation or slicing context were detected on this page.*"
+
+
 class PageVisualDocBuilder:
     """
     Builds a standalone Markdown document for a single report page and all its dynamic visuals.
@@ -123,6 +176,7 @@ class PageVisualDocBuilder:
         unlocked_filters = calc.unlocked_available_filters if calc else []
         slicers = calc.page_slicers if calc else []
 
+        lbl = VisualDocLabels
         lines = [
             "## Canvas Filter & Evaluation Context",
             "",
@@ -135,7 +189,7 @@ class PageVisualDocBuilder:
             lines.extend([
                 "These filters are locked in view mode with active constraints and directly restrict all metrics computed on this canvas:",
                 "",
-                "| Target Table | Target Field | Operator | Applied Value(s) |",
+                f"| {lbl.COL_TARGET_TABLE} | {lbl.COL_TARGET_FIELD} | {lbl.COL_OPERATOR} | {lbl.COL_APPLIED_VALUES} |",
                 "| :--- | :--- | :--- | :--- |",
             ])
             for f in locked_filters:
@@ -143,7 +197,7 @@ class PageVisualDocBuilder:
                 vals_str = ", ".join(f.applied_values) if f.applied_values else (f.default_value or "Active Filter")
                 lines.append(f"| {t_link} | `{f.field}` | `{f.operator or 'Custom'}` | `{vals_str}` |")
         else:
-            lines.append("> ℹ️ *No locked active filters constraining this page.*")
+            lines.append(lbl.MSG_NO_LOCKED_FILTERS)
 
         lines.extend([
             "",
@@ -154,14 +208,14 @@ class PageVisualDocBuilder:
             lines.extend([
                 "These filters are exposed in the filter panel for end-user interaction. The default state before user modification:",
                 "",
-                "| Target Table | Target Field | Default Selection / Value |",
+                f"| {lbl.COL_TARGET_TABLE} | {lbl.COL_TARGET_FIELD} | {lbl.COL_DEFAULT_SELECTION} |",
                 "| :--- | :--- | :--- |",
             ])
             for f in unlocked_filters:
                 t_link = self._format_table_link(f.table)
-                lines.append(f"| {t_link} | `{f.field}` | `{f.default_value or 'All (No filter applied)'}` |")
+                lines.append(f"| {t_link} | `{f.field}` | `{f.default_value or lbl.VALUE_ALL_DEFAULT}` |")
         else:
-            lines.append("> ℹ️ *No unlocked filters present in the page filter panel.*")
+            lines.append(lbl.MSG_NO_UNLOCKED_FILTERS)
 
         lines.extend([
             "",
@@ -172,7 +226,7 @@ class PageVisualDocBuilder:
             lines.extend([
                 "Interactive on-canvas slicers and selectors available on this page:",
                 "",
-                "| Slicer Control | Target Field | Default State | Synced Across Pages |",
+                f"| {lbl.COL_SLICER_CONTROL} | {lbl.COL_TARGET_FIELD} | {lbl.COL_DEFAULT_STATE} | {lbl.COL_SYNCED} |",
                 "| :--- | :--- | :--- | :--- |",
             ])
             for s in slicers:
@@ -180,11 +234,12 @@ class PageVisualDocBuilder:
                 synced = "Yes" if s.is_synced_across_pages else "No"
                 lines.append(f"| `{s.model_key}` | {t_link} ➔ `{s.field}` | `{s.default_selection}` | `{synced}` |")
         else:
-            lines.append("> ℹ️ *No canvas slicer controls present on this page.*")
+            lines.append(lbl.MSG_NO_SLICERS)
 
         return "\n".join(lines)
 
     def _build_visuals_catalog(self, dynamic_visuals: List[VisualDefinition]) -> str:
+        lbl = VisualDocLabels
         lines = [
             "## In-Scope Dynamic Visuals",
             "",
@@ -194,7 +249,7 @@ class PageVisualDocBuilder:
         ]
 
         if not dynamic_visuals:
-            lines.append("> ℹ️ *No dynamic visuals with metric evaluation or slicing context were detected on this page.*")
+            lines.append(lbl.MSG_NO_DYNAMIC_VISUALS)
             return "\n".join(lines)
 
         # Sort visuals in natural reading order: Top-to-Bottom, Left-to-Right
@@ -210,50 +265,208 @@ class PageVisualDocBuilder:
             title = v.title or f"Visual {idx}"
             s_pos = v.spatial_position
             zone = s_pos.zone if s_pos else "Canvas"
-            center_str = f"({s_pos.center_x}, {s_pos.center_y})" if s_pos else "N/A"
-            bbox_str = (
-                f"x: {s_pos.bounding_box.x}, y: {s_pos.bounding_box.y}, w: {s_pos.bounding_box.width}, h: {s_pos.bounding_box.height}"
-                if s_pos
-                else "N/A"
-            )
+            indicative_pos = zone.replace("Middle-", "Center-")
+            if indicative_pos in ("Center-Center", "Canvas"):
+                indicative_pos = "Center"
 
-            lines.extend([
-                f"### {idx}. {title}",
-                "",
-                f"- **Visual Type**: `{v.visual_type}`" + (" *(Slicer Control)*" if v.is_slicer else ""),
-                f"- **Visual ID**: `{v.visual_id}`",
-                f"- **Spatial Position**: Center **`{center_str}`** in **`{zone}`** (`{bbox_str}`)",
-            ])
+            if self.config.include_visual_svg_maps:
+                svg_url = self.config.resolve_visual_svg_url(self.page.display_name, v.visual_id)
+                img_tag = (
+                    f'<div style="min-width: 260px; max-width: 380px;">'
+                    f'<img src="{svg_url}" width="100%" alt="{title}" style="display: block; border: 1px solid #334155;" />'
+                    f'</div>'
+                )
+                details_cell = self._build_visual_details(v, indicative_pos, is_table_cell=True)
 
-            # Evaluated Metrics
-            calc = v.calculation_context
-            if calc.evaluated_metrics:
-                lines.append("- **Evaluated Metric(s)**:")
-                for m in calc.evaluated_metrics:
-                    m_link = self._format_metric_link(m)
-                    agg_badge = f" (Aggregation: `{m.aggregation}`)" if m.aggregation else ""
-                    role_badge = f" *(Role: {m.role})*" if m.role else ""
-                    lines.append(f"  - {m_link}{agg_badge}{role_badge}")
-            elif not v.is_slicer:
-                lines.append("- **Evaluated Metric(s)**: None (Dimension/Categorical visual without value metrics)")
-
-            # Slicing Coordinates
-            if calc.slicing_coordinates:
-                lines.append("- **Slicing Coordinate(s)**:")
-                for c in calc.slicing_coordinates:
-                    t_link = self._format_table_link(c.table)
-                    lines.append(f"  - {t_link} ➔ `{c.field}` *(Role: {c.role})*")
-
-            # Active Visual Filters
-            if calc.visual_active_filters:
-                lines.append("- **Visual Active Filter(s)**:")
-                for vf in calc.visual_active_filters:
-                    t_link = self._format_table_link(vf.table)
-                    lines.append(f"  - {t_link} ➔ `{vf.field}`: `{vf.condition}` *(Type: {vf.filter_type})*")
-
-            lines.append("")
+                lines.extend([
+                    f"### {idx}. {title}",
+                    "",
+                    f"| {lbl.COL_CANVAS_LOCATION} | {lbl.COL_SPECS_METRICS_PERIMETER} |",
+                    "| :---: | :--- |",
+                    f"| {img_tag} | {details_cell} |",
+                    "",
+                ])
+            else:
+                # Text-only fallback when SVG maps are disabled
+                details_list = self._build_visual_details(v, indicative_pos, is_table_cell=False)
+                lines.extend([
+                    f"### {idx}. {title}",
+                    "",
+                    details_list,
+                    "",
+                ])
 
         return "\n".join(lines).rstrip()
+
+    def _build_visual_details(self, visual: VisualDefinition, indicative_pos: str, is_table_cell: bool) -> str:
+        """
+        Formats technical specifications, metrics, slicing dimensions, and filter perimeter.
+        Abstracts between HTML-friendly single-cell table formatting and standard Markdown bullet lists.
+        """
+        lbl = VisualDocLabels
+        calc = visual.calculation_context
+        status_str = lbl.BADGE_HIDDEN if visual.is_hidden else lbl.BADGE_VISIBLE
+        slicer_badge = f" {lbl.BADGE_SLICER_CONTROL}" if visual.is_slicer else ""
+
+        sub_bullet = "•" if is_table_cell else "  -"
+        item_bullet = "&nbsp;&nbsp;&nbsp;&nbsp;•" if is_table_cell else "    -"
+        sep = "<br>" if is_table_cell else "\n"
+        prefix = "" if is_table_cell else "- "
+
+        sections: List[str] = []
+
+        # 1. Identity & Core Specs
+        header_lines = [
+            f"{prefix}**{lbl.LABEL_VISUAL_TYPE}**: `{visual.visual_type}`{slicer_badge} &nbsp; {status_str}",
+            f"{prefix}**{lbl.LABEL_VISUAL_ID}**: `{visual.visual_id}`",
+            f"{prefix}**{lbl.LABEL_INDICATIVE_POSITION}**: `{indicative_pos}`",
+        ]
+        sections.append(sep.join(header_lines))
+
+        # 2. Evaluated DAX Metrics
+        if calc.evaluated_metrics:
+            m_lines = [f"{prefix}**{lbl.LABEL_EVALUATED_METRICS}**:"]
+            for m in calc.evaluated_metrics:
+                m_link = self._format_metric_link(m)
+                agg_badge = f" ({lbl.AGGREGATION_PREFIX}: `{m.aggregation}`)" if m.aggregation else ""
+                role_badge = f" *({lbl.ROLE_PREFIX}: {m.role})*" if m.role else ""
+                m_lines.append(f"{sub_bullet} {m_link}{agg_badge}{role_badge}")
+            sections.append(sep.join(m_lines))
+        elif not visual.is_slicer:
+            sections.append(f"{prefix}**{lbl.LABEL_EVALUATED_METRICS}**: {lbl.VALUE_NONE_STRUCTURAL}")
+
+        # 3. Slicing Dimensions
+        if calc.slicing_coordinates:
+            s_lines = [f"{prefix}**{lbl.LABEL_SLICING_DIMENSIONS}**:"]
+            for c in calc.slicing_coordinates:
+                t_link = self._format_table_link(c.table)
+                s_lines.append(f"{sub_bullet} {t_link} ➔ `{c.field}` *({lbl.ROLE_PREFIX}: {c.role})*")
+            sections.append(sep.join(s_lines))
+
+        # 4. Applicable Filter Perimeter (Each tier with listed bullet points)
+        filter_lines = [f"{prefix}**{lbl.LABEL_FILTER_PERIMETER}**:"]
+
+        # 4a. Locked Page Filters
+        if calc.locked_active_filters:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_LOCKED_PAGE_FILTERS}**:")
+            for f in calc.locked_active_filters:
+                t_link = self._format_table_link(f.table)
+                vals = ", ".join(f.applied_values) if f.applied_values else (f.default_value or "Active")
+                filter_lines.append(f"{item_bullet} {t_link} ➔ `{f.field}` In (`{vals}`) {lbl.BADGE_HARD_CONSTRAINT}")
+        else:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_LOCKED_PAGE_FILTERS}**: {lbl.VALUE_NONE}")
+
+        # 4b. Interactive Page Filters
+        if calc.unlocked_available_filters:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_INTERACTIVE_PAGE_FILTERS}**:")
+            for f in calc.unlocked_available_filters:
+                t_link = self._format_table_link(f.table)
+                def_val = f.default_value or lbl.VALUE_ALL_DEFAULT
+                filter_lines.append(f"{item_bullet} {t_link} ➔ `{f.field}` ({lbl.DEFAULT_PREFIX}: `{def_val}`)")
+        else:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_INTERACTIVE_PAGE_FILTERS}**: {lbl.VALUE_NONE}")
+
+        # 4c. Canvas Page Slicers
+        if not visual.is_slicer and calc.page_slicers:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_CANVAS_PAGE_SLICERS}**:")
+            for s in calc.page_slicers:
+                t_link = self._format_table_link(s.table)
+                filter_lines.append(f"{item_bullet} {t_link} ➔ `{s.field}` ({lbl.DEFAULT_PREFIX}: `{s.default_selection}`)")
+        elif not visual.is_slicer:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_CANVAS_PAGE_SLICERS}**: {lbl.VALUE_NONE}")
+
+        # 4d. Visual-Level Filters
+        if calc.visual_active_filters:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_VISUAL_LEVEL_FILTERS}**:")
+            for vf in calc.visual_active_filters:
+                t_link = self._format_table_link(vf.table)
+                filter_lines.append(f"{item_bullet} {t_link} ➔ `{vf.field}`: `{vf.condition}` *({lbl.TYPE_PREFIX}: {vf.filter_type})*")
+        else:
+            filter_lines.append(f"{sub_bullet} **{lbl.LABEL_VISUAL_LEVEL_FILTERS}**: {lbl.VALUE_NONE}")
+
+        sections.append(sep.join(filter_lines))
+
+        major_sep = "<br><br>" if is_table_cell else "\n\n"
+        return major_sep.join(sections)
+
+    def generate_visual_svg(self, visual: VisualDefinition) -> str:
+        """
+        Generates scaled SVG mini-map of the page canvas highlighting the visual.
+        - Square dark gray page canvas border (#334155).
+        - Dashed dark gray 3x3 reference grid guidelines (#64748b).
+        - Square visual rectangle with dark gray border (#334155), solid if visible, dashed if hidden.
+        - Visual fill: dark gray (#334155) with 80% transparency (fill-opacity="0.20").
+        - Center marker: crisp black 'X' (#000000).
+        """
+        page_w = float(self.page.width) if self.page.width and self.page.width > 0 else 1920.0
+        page_h = float(self.page.height) if self.page.height and self.page.height > 0 else 1080.0
+
+        dark_gray_border = "#334155"
+        dark_gray_grid = "#64748b"
+        visual_fill = "#334155"
+        fill_opacity = "0.20"
+
+        s_pos = visual.spatial_position
+        if s_pos:
+            bbox = s_pos.bounding_box
+            x = bbox.x
+            y = bbox.y
+            w = bbox.width
+            h = bbox.height
+            cx = s_pos.center_x
+            cy = s_pos.center_y
+        else:
+            x, y, w, h = 0.0, 0.0, page_w, page_h
+            cx, cy = page_w / 2.0, page_h / 2.0
+
+        stroke_style = 'stroke-dasharray="16,10"' if visual.is_hidden else ""
+
+        x1 = page_w / 3.0
+        x2 = (page_w * 2.0) / 3.0
+        y1 = page_h / 3.0
+        y2 = (page_h * 2.0) / 3.0
+
+        d = 14  # Size of the X arms
+
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {page_w} {page_h}" width="100%" height="auto" style="background: #ffffff; display: block;">
+  <!-- Canvas Background & Page Border (Square & Dark Gray) -->
+  <rect x="2" y="2" width="{page_w - 4}" height="{page_h - 4}" fill="#ffffff" stroke="{dark_gray_border}" stroke-width="4"/>
+  
+  <!-- Zone Guidelines (3x3 grid - Dashed Dark Gray) -->
+  <line x1="{x1:.1f}" y1="0" x2="{x1:.1f}" y2="{page_h}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="{x2:.1f}" y1="0" x2="{x2:.1f}" y2="{page_h}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="0" y1="{y1:.1f}" x2="{page_w}" y2="{y1:.1f}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="0" y1="{y2:.1f}" x2="{page_w}" y2="{y2:.1f}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
+  
+  <!-- Visual Bounding Box (Square & Dark Gray Border, Dark Gray Fill with 80% Transparency) -->
+  <rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{visual_fill}" fill-opacity="{fill_opacity}" stroke="{dark_gray_border}" stroke-width="5" {stroke_style}/>
+  
+  <!-- Visual Center Marker: Black X -->
+  <line x1="{cx - d:.1f}" y1="{cy - d:.1f}" x2="{cx + d:.1f}" y2="{cy + d:.1f}" stroke="#000000" stroke-width="4" stroke-linecap="square"/>
+  <line x1="{cx - d:.1f}" y1="{cy + d:.1f}" x2="{cx + d:.1f}" y2="{cy - d:.1f}" stroke="#000000" stroke-width="4" stroke-linecap="square"/>
+</svg>"""
+        return svg
+
+    def build_svg_assets(self) -> Dict[str, str]:
+        """
+        Generates all SVG mini-map assets for dynamic visuals on this page.
+        Returns a dictionary mapping relative asset path (e.g. 'assets/<Page>/<Visual_Id>.svg')
+        to the SVG XML string.
+        """
+        if not self.config.include_visual_svg_maps:
+            return {}
+
+        assets: Dict[str, str] = {}
+        clean_page = sanitize_filename(self.page.display_name)
+        assets_sub = self.config.visual_assets_subdir.strip("/\\")
+
+        dynamic_visuals = [v for v in self.page.visuals if v.is_dynamic]
+        for v in dynamic_visuals:
+            clean_vid = sanitize_filename(v.visual_id)
+            rel_path = f"{assets_sub}/{clean_page}/{clean_vid}.svg" if assets_sub else f"{clean_page}/{clean_vid}.svg"
+            assets[rel_path] = self.generate_visual_svg(v)
+
+        return assets
 
     def _build_static_summary(self, static_count: int) -> str:
         lines = [

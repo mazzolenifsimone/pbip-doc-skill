@@ -8,6 +8,7 @@ import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from ..dax_formatter import format_dax
 
 
 class TableDocBuilder:
@@ -305,11 +306,12 @@ class TableDocBuilder:
                 lines.append("")
                 lines.append("### DAX Table Formula:")
                 lines.append("```dax")
-                clean_calc_expr = calc_expr.strip()
-                if clean_calc_expr.startswith("```"):
-                    clean_calc_expr = re.sub(r'^```[a-zA-Z]*\r?\n?', '', clean_calc_expr)
-                    clean_calc_expr = re.sub(r'\r?\n?\s*```\s*$', '', clean_calc_expr).strip()
-                lines.append(clean_calc_expr)
+                formatted_calc_expr = format_dax(
+                    calc_expr,
+                    name=self.name,
+                    entity_type="calculated_table",
+                )
+                lines.append(formatted_calc_expr)
                 lines.append("```")
             else:
                 lines.append("")
@@ -543,11 +545,6 @@ class TableDocBuilder:
                 c_fmt = cc.get("format_string") or "Default"
                 c_desc = cc.get("description")
                 c_expr = cc.get("expression") or ""
-                c_expr_clean = c_expr.strip() if c_expr else "/* No formula available */"
-                if c_expr_clean.startswith("```"):
-                    c_expr_clean = re.sub(r'^```[a-zA-Z]*\r?\n?', '', c_expr_clean)
-                    c_expr_clean = re.sub(r'\r?\n?\s*```\s*$', '', c_expr_clean).strip()
-
                 lines.append(f"#### Calculated Column: `{c_name}`")
                 lines.append(f"- **Data Type**: `{c_type}`")
                 lines.append(f"- **Format**: `{c_fmt}`")
@@ -555,7 +552,13 @@ class TableDocBuilder:
                     lines.append(f"- **Description**: {c_desc}")
                 lines.append("- **DAX Formula**:")
                 lines.append("```dax")
-                lines.append(c_expr_clean)
+                formatted_c_expr = format_dax(
+                    c_expr,
+                    name=c_name,
+                    entity_type="calculated_column",
+                    table_name=self.name,
+                )
+                lines.append(formatted_c_expr)
                 lines.append("```")
                 lines.append("")
 

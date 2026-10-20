@@ -7,6 +7,7 @@ Vanilla Python implementation.
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from ..dax_formatter import format_dax
 
 
 class FunctionDocBuilder:
@@ -142,17 +143,18 @@ class FunctionDocBuilder:
 
     def _build_formula_chapter(self) -> str:
         """Implementation Formula."""
-        lines = [
+        formatted_dax = format_dax(
+            self.expression,
+            name=self.name,
+            entity_type="function",
+            parameters_signature=self.signature,
+        )
+        return "\n".join([
             "## Implementation Formula",
             "```dax",
-            f"function {self.name} = {self.signature} =>",
-        ]
-        body = self.expression.strip() if self.expression else "/* No implementation provided */"
-        # Indent body
-        for line in body.splitlines():
-            lines.append(f"    {line}")
-        lines.append("```")
-        return "\n".join(lines)
+            formatted_dax,
+            "```",
+        ])
 
     def _build_downstream_chapter(self) -> str:
         """Downstream Impact Analysis (Where Used)."""

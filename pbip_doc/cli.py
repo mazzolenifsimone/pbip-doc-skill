@@ -219,6 +219,11 @@ def main():
         action="store_true",
         help="Disable generation of report page and visual documentation",
     )
+    docgen_parser.add_argument(
+        "--no-visual-svg-maps",
+        action="store_true",
+        help="Disable generation of scaled SVG canvas mini-maps for visual documentation",
+    )
 
     # Command: config
     config_parser = subparsers.add_parser("config", help="Inspect, export or initialize configuration JSON files")
@@ -367,6 +372,8 @@ def main():
             config.report_path = args.report_path
         if getattr(args, "no_visuals", False):
             config.include_visual_docs = False
+        if getattr(args, "no_visual_svg_maps", False):
+            config.include_visual_svg_maps = False
         if args.no_frontmatter:
             config.include_table_yaml_frontmatter = False
             config.include_measure_yaml_frontmatter = False
@@ -381,7 +388,8 @@ def main():
             table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
             measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
             function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
-            visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir)]
+            visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
+            svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
             print(f"[SUCCESS] Documentation successfully generated in '{config.output_dir}'!")
             print(f" -> Index: {config.output_dir}/INDEX.md")
             print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({config.output_dir}/{config.tables_subdir}/)")
@@ -390,6 +398,8 @@ def main():
                 print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({config.output_dir}/{config.functions_subdir}/)")
             if visual_docs:
                 print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({config.output_dir}/{config.visuals_subdir}/)")
+            if svg_docs:
+                print(f" -> Visual Maps: {len(svg_docs)} scaled SVG canvas mini-maps ({config.output_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
             elif not config.include_visual_docs:
                 print(f" -> Visuals: Disabled (--no-visuals)")
             print(f" -> Auto Date Tables Excluded: {'Yes (default)' if config.exclude_auto_date_tables else 'No (included)'}")
