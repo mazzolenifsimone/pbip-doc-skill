@@ -39,10 +39,13 @@ docs/
 ├── functions/                             # User-Defined DAX Functions (UDFs)
 │   ├── fn_FormatCurrency.md
 │   └── ...
-└── expressions/                           # Shared Power Query M expressions
-    ├── Staging_Orders.md
-    ├── DimGeography_Source.md
-    └── Parameter_Environment.md
+├── expressions/                           # Shared Power Query M expressions
+│   ├── Staging_Orders.md
+│   ├── DimGeography_Source.md
+│   └── Parameter_Environment.md
+└── visuals/                               # Dedicated Report Page & Visual markdowns
+    ├── Overview.md
+    └── Detailed_Info.md
 ```
 
 ---
@@ -58,6 +61,7 @@ docs/
 | 05 | [`05_expression_and_query_pages.md`](./05_expression_and_query_pages.md) | `expression_doc.py` | Power Query expressions, staging queries, `#table` inline Markdown rendering, and downstream tables |
 | 06 | [`06_function_pages.md`](./06_function_pages.md) | `function_doc.py` | DAX UDF functions, parameter signatures, formulas, and consuming measures |
 | 07 | [`07_rag_patterns_and_agent_conventions.md`](./07_rag_patterns_and_agent_conventions.md) | `utils.py` | RAG optimization, YAML frontmatter schemas, token economy, Markdown table sanitization, and linking |
+| 08 | [`08_report_page_and_visual_docs.md`](./08_report_page_and_visual_docs.md) | `visual_doc.py` | Report page documents, canvas coordinates, filter perimeter (locked/interactive/slicers), and dynamic visual catalog |
 
 ---
 

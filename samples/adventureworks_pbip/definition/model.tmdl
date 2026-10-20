@@ -1,4 +1,0 @@
-model Model
-	compatibilityLevel: 1600
-	defaultPowerBIDataSourceVersion: powerBI_V3
-	culture: en-US

@@ -57,6 +57,8 @@ PBIPSemanticModel (Root JSON)
 | 07 | [`07_user_defined_functions.md`](./07_user_defined_functions.md) | `functions[]` | Custom DAX functions (UDFs), parameters, return types, and consuming measures |
 | 08 | [`08_power_query_lineage_and_inline_tables.md`](./08_power_query_lineage_and_inline_tables.md) | `expressions[]`, `shared_queries[]` | Power Query M lineage, multi-hop staging queries, and inline `#table` parsing |
 | 09 | [`09_inherited_entities_composite_models.md`](./09_inherited_entities_composite_models.md) | `is_inherited`, `out_of_scope` | Composite models, inherited entity tables, external measures, and out-of-scope filtering |
+| 10 | [`10_report_and_visual_metadata.md`](./10_report_and_visual_metadata.md) | `/report`, `pages[]`, `visuals[]` | PBIP Report components, PBIR/Legacy formats, field projections, slicers, and top-down lineage |
+
 
 ---
 

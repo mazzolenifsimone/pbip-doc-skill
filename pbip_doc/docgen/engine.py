@@ -1,6 +1,6 @@
 """
 Documentation Generator Engine.
-Coordinates TableDocBuilder, MeasureDocBuilder, and IndexDocBuilder
+Coordinates TableDocBuilder, MeasureDocBuilder, IndexDocBuilder, and PageVisualDocBuilder
 to emit granular, AI-RAG-ready, human-readable markdown documents.
 Vanilla Python implementation.
 """
@@ -16,12 +16,16 @@ from .measure_doc import MeasureDocBuilder
 from .function_doc import FunctionDocBuilder
 from .expression_doc import ExpressionDocBuilder
 from .index_doc import IndexDocBuilder
+from .visual_doc import PageVisualDocBuilder
 from .utils import sanitize_filename
+from ..report_parser import ReportParser
+from ..report_schema import PBIPReportModel
 
 
 class MarkdownDocGenerator:
     """
-    Main entry point for generating modular documentation from semantic model JSON.
+    Main entry point for generating modular documentation from semantic model JSON
+    and associated Power BI report presentation metadata.
     """
 
     def __init__(self, config: Optional[DocGenConfig] = None):
@@ -33,17 +37,19 @@ class MarkdownDocGenerator:
         {
           "INDEX.md": content,
           "tables/FactInternetSales.md": content,
-          "measures/Total_Sales.md": content,
+          "measures/Sales/Total_Sales.md": content,
           "expressions/Staging_Orders.md": content,
+          "visuals/Executive_Overview.md": content,
           ...
         }
         """
         data = self._load_model_dict(model_data)
+        report_model = self._resolve_report(model_data)
         documents: Dict[str, str] = {}
 
         # 1. Master Catalog (INDEX.md)
         if self.config.generate_index_file:
-            index_builder = IndexDocBuilder(data, self.config)
+            index_builder = IndexDocBuilder(data, self.config, report_model=report_model)
             documents["INDEX.md"] = index_builder.build_markdown()
 
         # 2. Table Documents (one markdown per table)
@@ -94,6 +100,29 @@ class MarkdownDocGenerator:
                 doc_path = f"{expressions_sub}/{expr_filename}" if expressions_sub else expr_filename
                 documents[doc_path] = expr_builder.build_markdown()
 
+        # 6. Report & Visual Documents (one markdown per page)
+        if self.config.include_visual_docs and report_model:
+            visuals_sub = self.config.visuals_subdir.strip("/\\")
+            known_measure_keys = {
+                (m.get("table"), m.get("name")) for m in data.get("measures", [])
+            } | {
+                f"{m.get('table')}[{m.get('name')}]" for m in data.get("measures", [])
+            }
+            known_table_names = {t.get("name") for t in data.get("tables", [])}
+
+            for page in report_model.pages:
+                page_builder = PageVisualDocBuilder(
+                    page=page,
+                    report_model=report_model,
+                    config=self.config,
+                    known_measure_keys=known_measure_keys,
+                    known_table_names=known_table_names,
+                )
+                clean_page_name = sanitize_filename(page.display_name)
+                page_filename = f"{clean_page_name}.md"
+                doc_path = f"{visuals_sub}/{page_filename}" if visuals_sub else page_filename
+                documents[doc_path] = page_builder.build_markdown()
+
         return documents
 
     def write_to_directory(self, model_data: Union[Dict[str, Any], str, Path], target_dir: Optional[str] = None) -> Dict[str, str]:
@@ -112,6 +141,58 @@ class MarkdownDocGenerator:
 
         return docs
 
+    def _resolve_report(self, model_input: Union[Dict[str, Any], str, Path]) -> Optional[PBIPReportModel]:
+        """Attempts to locate and parse the associated PBIP *.Report component."""
+        if not self.config.include_visual_docs:
+            return None
+
+        # 1. Explicit report path from config
+        if self.config.report_path:
+            rp = Path(self.config.report_path)
+            if rp.exists():
+                try:
+                    parser = ReportParser()
+                    return parser.parse(str(rp))
+                except Exception:
+                    return None
+
+        # 2. Auto-discovery from model_input
+        if isinstance(model_input, (str, Path)):
+            p = Path(model_input)
+            candidates = []
+
+            if p.suffix.lower() == ".report":
+                candidates.append(p)
+            elif p.suffix.lower() == ".semanticmodel":
+                candidates.append(p.parent / f"{p.stem}.Report")
+                candidates.extend(list(p.parent.glob("*.Report")))
+            elif p.suffix.lower() == ".pbip":
+                candidates.append(p.parent / f"{p.stem}.Report")
+                candidates.extend(list(p.parent.glob("*.Report")))
+            elif p.is_dir():
+                candidates.append(p / f"{p.name}.Report")
+                candidates.extend(list(p.glob("*.Report")))
+                candidates.extend(list(p.parent.glob("*.Report")))
+                if p.name == "definition" and p.parent.suffix.lower() == ".semanticmodel":
+                    candidates.append(p.parent.parent / f"{p.parent.stem}.Report")
+                    candidates.extend(list(p.parent.parent.glob("*.Report")))
+            elif p.is_file():
+                if p.name == "report_documentation.json" or "report" in p.name.lower():
+                    candidates.append(p)
+                candidates.append(p.parent / "report_documentation.json")
+                candidates.extend(list(p.parent.glob("*.Report")))
+                candidates.extend(list(p.parent.parent.glob("*.Report")))
+
+            for cand in candidates:
+                if cand.exists():
+                    try:
+                        parser = ReportParser()
+                        return parser.parse(str(cand))
+                    except Exception:
+                        continue
+
+        return None
+
     def _load_model_dict(self, model_input: Union[Dict[str, Any], str, Path]) -> Dict[str, Any]:
         """Ensures input is converted to standard dictionary."""
         if isinstance(model_input, dict):
@@ -122,7 +203,6 @@ class MarkdownDocGenerator:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                # If this is already an enriched model dictionary generated by pbip_doc
                 if isinstance(data, dict) and ("model_name" in data or "source_format" in data) and "tables" in data:
                     return data
             except Exception:

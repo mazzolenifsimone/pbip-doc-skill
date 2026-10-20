@@ -58,6 +58,8 @@ Located in [`documentation/json_schema/`](./json_schema/README.md):
 - [`07_user_defined_functions.md`](./json_schema/07_user_defined_functions.md): User-Defined DAX Functions (UDFs).
 - [`08_power_query_lineage_and_inline_tables.md`](./json_schema/08_power_query_lineage_and_inline_tables.md): Power Query lineage and `#table` parsing.
 - [`09_inherited_entities_composite_models.md`](./json_schema/09_inherited_entities_composite_models.md): Composite models and inherited remote entities.
+- [`10_report_and_visual_metadata.md`](./json_schema/10_report_and_visual_metadata.md): Report definitions, PBIR/Legacy visual containers, projections, and top-down lineage.
+
 
 ### 2. Phase 2: Markdown Generation & RAG Patterns Reference
 Located in [`documentation/markdown_generator/`](./markdown_generator/README.md):
@@ -69,3 +71,4 @@ Located in [`documentation/markdown_generator/`](./markdown_generator/README.md)
 - [`05_expression_and_query_pages.md`](./markdown_generator/05_expression_and_query_pages.md): Shared ETL queries, `#table` rendering, and staging lineage.
 - [`06_function_pages.md`](./markdown_generator/06_function_pages.md): DAX UDF pages and parameter signatures.
 - [`07_rag_patterns_and_agent_conventions.md`](./markdown_generator/07_rag_patterns_and_agent_conventions.md): RAG design, YAML frontmatter schemas, token chunking, and table sanitization.
+- [`08_report_page_and_visual_docs.md`](./markdown_generator/08_report_page_and_visual_docs.md): Report pages, visual spatial positions, canvas filter context, and metric bindings.

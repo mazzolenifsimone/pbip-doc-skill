@@ -15,9 +15,15 @@ class IndexDocBuilder:
     Builds the master catalog INDEX.md linking all generated table and measure documents.
     """
 
-    def __init__(self, model_data: Dict[str, Any], config: Optional[DocGenConfig] = None):
+    def __init__(
+        self,
+        model_data: Dict[str, Any],
+        config: Optional[DocGenConfig] = None,
+        report_model: Optional[Any] = None,
+    ):
         self.model = model_data
         self.config = config or DocGenConfig()
+        self.report_model = report_model
 
     def build_markdown(self) -> str:
         sections = []
@@ -46,6 +52,15 @@ class IndexDocBuilder:
             "excluded_tables_count": self.model.get("excluded_tables_count", 0),
             "tags": ["semantic_model", "catalog", "pbip", self.model.get("model_name", "model")],
         }
+        if self.report_model and self.config.include_visual_docs:
+            rep_pages = getattr(self.report_model, "pages", []) if hasattr(self.report_model, "pages") else self.report_model.get("pages", [])
+            rep_name = getattr(self.report_model, "report_name", "") if hasattr(self.report_model, "report_name") else self.report_model.get("report_name", "")
+            frontmatter["report_name"] = rep_name
+            frontmatter["report_pages_count"] = len(rep_pages)
+            if rep_name:
+                frontmatter["tags"].append(sanitize_filename(rep_name))
+            frontmatter["tags"].append("report")
+
         sections.append(format_yaml_frontmatter(frontmatter))
 
         # 2. Title & Metadata
@@ -60,12 +75,18 @@ class IndexDocBuilder:
         # 5. Measure Catalog (Grouped by Calculation Depth)
         sections.append(self._build_measures_catalog(valid_measures))
 
-        # 6. UDF Functions Catalog (if any functions exist)
+        # 6. Report Pages & Visual Context (if report model present and enabled)
+        if self.report_model and self.config.include_visual_docs:
+            rep_section = self._build_report_pages_catalog()
+            if rep_section:
+                sections.append(rep_section)
+
+        # 7. UDF Functions Catalog (if any functions exist)
         fn_section = self._build_functions_catalog(valid_functions)
         if fn_section:
             sections.append(fn_section)
 
-        # 7. Expressions & Shared ETL Queries Catalog (if any expressions exist)
+        # 8. Expressions & Shared ETL Queries Catalog (if any expressions exist)
         expr_section = self._build_expressions_catalog(expr_list)
         if expr_section:
             sections.append(expr_section)
@@ -331,5 +352,104 @@ class IndexDocBuilder:
                 expr_url = f"{expressions_sub}/{clean_name}.md" if expressions_sub else f"{clean_name}.md"
             doc_link = f"[`{name}`]({expr_url})"
             lines.append(f"| `{name}` | {type_badge} | {inline_info} | {downstream_str} | {sources_str} | {doc_link} |")
+
+        return "\n".join(lines)
+
+    def _build_report_pages_catalog(self) -> str:
+        """Catalog of report pages with links to dedicated page documentation."""
+        if not self.report_model:
+            return ""
+
+        pages = getattr(self.report_model, "pages", [])
+        if not pages and isinstance(self.report_model, dict):
+            pages = self.report_model.get("pages", [])
+
+        if not pages:
+            return ""
+
+        rep_name = getattr(self.report_model, "report_name", "") or (
+            self.report_model.get("report_name", "Report") if isinstance(self.report_model, dict) else "Report"
+        )
+        rep_format = getattr(self.report_model, "format", "") or (
+            self.report_model.get("format", "PBIR") if isinstance(self.report_model, dict) else "PBIR"
+        )
+
+        lines = [
+            f"## Report Presentation & Visuals: `{rep_name}`",
+            "",
+            f"The presentation layer `{rep_name}.Report` ({rep_format}) is organized into **{len(pages)}** pages. "
+            "Each page features a dedicated documentation document detailing canvas coordinates, evaluated metrics, slicing dimensions, and filter context:",
+            "",
+            "| Page | Role | Canvas Size | Status | Dynamic Visuals | Key Evaluated Metrics |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- |",
+        ]
+
+        vis_sub = self.config.visuals_subdir.strip("/\\")
+        meas_sub = self.config.measures_subdir.strip("/\\")
+
+        known_measures = {
+            (meas.get("table"), meas.get("name"))
+            for meas in self.model.get("measures", [])
+        }
+
+        for p in pages:
+            p_name = getattr(p, "display_name", "") if hasattr(p, "display_name") else p.get("display_name", "")
+            p_type = getattr(p, "page_type", "NORMAL") if hasattr(p, "page_type") else p.get("page_type", "NORMAL")
+            w = getattr(p, "width", 1920) if hasattr(p, "width") else p.get("width", 1920)
+            h = getattr(p, "height", 1080) if hasattr(p, "height") else p.get("height", 1080)
+            is_hidden = getattr(p, "is_hidden", False) if hasattr(p, "is_hidden") else p.get("is_hidden", False)
+            visuals = getattr(p, "visuals", []) if hasattr(p, "visuals") else p.get("visuals", [])
+
+            dynamic_v = [v for v in visuals if (getattr(v, "is_dynamic", False) if hasattr(v, "is_dynamic") else True)]
+
+            clean_p = sanitize_filename(p_name)
+            if self.config.base_doc_url:
+                p_url = join_doc_path(self.config.base_doc_url, vis_sub, f"{clean_p}.md") if vis_sub else join_doc_path(self.config.base_doc_url, f"{clean_p}.md")
+            else:
+                p_url = f"{vis_sub}/{clean_p}.md" if vis_sub else f"{clean_p}.md"
+
+            p_link = f"[{p_name}]({p_url})" if self.config.include_markdown_links else f"`{p_name}`"
+            status_str = "Hidden" if is_hidden else "Visible"
+
+            # Gather top distinct metrics
+            metric_links = []
+            seen_keys = set()
+            for v in dynamic_v:
+                calc = getattr(v, "calculation_context", None) if hasattr(v, "calculation_context") else v.get("calculation_context", {})
+                v_metrics = (
+                    getattr(calc, "evaluated_metrics", [])
+                    if hasattr(calc, "evaluated_metrics")
+                    else (calc.get("evaluated_metrics", []) if isinstance(calc, dict) else [])
+                )
+                for m in v_metrics:
+                    m_key = getattr(m, "model_key", "") if hasattr(m, "model_key") else m.get("model_key", "")
+                    tbl = getattr(m, "table", "") if hasattr(m, "table") else m.get("table", "")
+                    fld = getattr(m, "field", "") if hasattr(m, "field") else m.get("field", "")
+                    m_type = getattr(m, "field_type", "") if hasattr(m, "field_type") else (m.get("field_type", "") if isinstance(m, dict) else "")
+                    tables_sub = self.config.tables_subdir.strip("/\\")
+                    if m_key and m_key not in seen_keys:
+                        seen_keys.add(m_key)
+                        if self.config.include_markdown_links and tbl and fld and tbl != "Unknown":
+                            is_meas = (m_type == "MEASURE") or ((tbl, fld) in known_measures)
+                            if is_meas:
+                                if self.config.base_doc_url:
+                                    m_url = join_doc_path(self.config.base_doc_url, meas_sub, sanitize_filename(tbl), f"{sanitize_filename(fld)}.md") if meas_sub else join_doc_path(self.config.base_doc_url, sanitize_filename(tbl), f"{sanitize_filename(fld)}.md")
+                                else:
+                                    m_url = f"{meas_sub}/{sanitize_filename(tbl)}/{sanitize_filename(fld)}.md" if meas_sub else f"{sanitize_filename(tbl)}/{sanitize_filename(fld)}.md"
+                            else:
+                                if self.config.base_doc_url:
+                                    m_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{sanitize_filename(tbl)}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{sanitize_filename(tbl)}.md")
+                                else:
+                                    m_url = f"{tables_sub}/{sanitize_filename(tbl)}.md" if tables_sub else f"{sanitize_filename(tbl)}.md"
+                            metric_links.append(f"[{m_key}]({m_url})")
+                        else:
+                            metric_links.append(f"`{m_key}`")
+                        if len(metric_links) >= 3:
+                            break
+                if len(metric_links) >= 3:
+                    break
+
+            metrics_display = ", ".join(metric_links) if metric_links else "—"
+            lines.append(f"| {p_link} | `{p_type}` | `{w}x{h}` | {status_str} | {len(dynamic_v)} | {metrics_display} |")
 
         return "\n".join(lines)

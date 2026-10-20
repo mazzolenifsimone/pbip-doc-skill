@@ -67,6 +67,12 @@ class DocGenConfig:
     include_expression_m_code: bool = True
     include_expression_rag_hints: bool = True
 
+    # Visual / Report documentation modular sections
+    include_visual_docs: bool = True
+    include_visual_yaml_frontmatter: bool = True
+    visuals_subdir: str = "visuals"
+    report_path: Optional[str] = None
+
     # General options
     output_dir: str = "docs"
     tables_subdir: str = "tables"
@@ -81,6 +87,33 @@ class DocGenConfig:
     base_doc_url: Optional[str] = None
     external_docs_base_url: Optional[str] = None
     external_doc_paths: Dict[str, str] = field(default_factory=dict)
+
+    def resolve_measure_url_from_visual(self, table: str, measure_name: str) -> str:
+        """Computes relative or absolute URL to a measure doc from a page visual doc."""
+        clean_tbl = sanitize_filename(table)
+        clean_m = sanitize_filename(measure_name)
+        if self.base_doc_url:
+            meas_sub = self.measures_subdir.strip("/\\")
+            if meas_sub:
+                return join_doc_path(self.base_doc_url, meas_sub, clean_tbl, f"{clean_m}.md")
+            return join_doc_path(self.base_doc_url, clean_tbl, f"{clean_m}.md")
+        meas_sub = self.measures_subdir.strip("/\\")
+        if meas_sub:
+            return f"../{meas_sub}/{clean_tbl}/{clean_m}.md"
+        return f"../{clean_tbl}/{clean_m}.md"
+
+    def resolve_table_url_from_visual(self, table: str) -> str:
+        """Computes relative or absolute URL to a table doc from a page visual doc."""
+        clean_tbl = sanitize_filename(table)
+        if self.base_doc_url:
+            tbl_sub = self.tables_subdir.strip("/\\")
+            if tbl_sub:
+                return join_doc_path(self.base_doc_url, tbl_sub, f"{clean_tbl}.md")
+            return join_doc_path(self.base_doc_url, f"{clean_tbl}.md")
+        tbl_sub = self.tables_subdir.strip("/\\")
+        if tbl_sub:
+            return f"../{tbl_sub}/{clean_tbl}.md"
+        return f"../{clean_tbl}.md"
 
     def is_table_excluded(self, table_name: Optional[str]) -> bool:
         """
@@ -472,6 +505,10 @@ class DocGenConfig:
             "include_expression_steps_section": "Include step-by-step transformation breakdown in expression docs.",
             "include_expression_m_code": "Include raw M code in expression docs.",
             "include_expression_rag_hints": "Include contextual RAG hints in expression docs.",
+            "include_visual_docs": "Generate documentation for report pages, canvas filter contexts, and dynamic visuals.",
+            "include_visual_yaml_frontmatter": "Include structured YAML frontmatter at top of visual / page docs.",
+            "visuals_subdir": "Subdirectory name for report page / visual documentation pages.",
+            "report_path": "Path to associated *.Report directory (if not automatically discovered alongside the semantic model).",
             "output_dir": "Target directory where documentation files are written.",
             "tables_subdir": "Subdirectory name for table documentation pages.",
             "measures_subdir": "Subdirectory name for measure documentation pages.",

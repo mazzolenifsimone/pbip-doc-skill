@@ -204,6 +204,21 @@ def main():
         default=None,
         help="Subdirectory name for UDF function markdowns (default: functions)",
     )
+    docgen_parser.add_argument(
+        "--visuals-dir",
+        default=None,
+        help="Subdirectory name for report page and visual markdowns (default: visuals)",
+    )
+    docgen_parser.add_argument(
+        "--report-path",
+        default=None,
+        help="Explicit path to associated *.Report folder or report.json file",
+    )
+    docgen_parser.add_argument(
+        "--no-visuals",
+        action="store_true",
+        help="Disable generation of report page and visual documentation",
+    )
 
     # Command: config
     config_parser = subparsers.add_parser("config", help="Inspect, export or initialize configuration JSON files")
@@ -225,6 +240,24 @@ def main():
         action="store_true",
         help="Overwrite target file if it already exists when using --init",
     )
+
+    # Command: report-extract
+    rep_extract_parser = subparsers.add_parser(
+        "report-extract", help="Parse a PBIP *.Report folder and export JSON documentation"
+    )
+    rep_extract_parser.add_argument("path", help="Path to *.Report folder, PBIP directory, or report.json file")
+    rep_extract_parser.add_argument(
+        "-o", "--output", default="report_documentation.json", help="Output JSON path (default: report_documentation.json)"
+    )
+    rep_extract_parser.add_argument(
+        "--indent", type=int, default=2, help="Indentation level for output JSON (default: 2)"
+    )
+
+    # Command: report-inspect
+    rep_inspect_parser = subparsers.add_parser(
+        "report-inspect", help="Display console summary of report pages, visuals, spatial zones, and calculation context"
+    )
+    rep_inspect_parser.add_argument("path", help="Path to *.Report folder, PBIP directory, or report.json file")
 
     args = parser.parse_args()
 
@@ -250,6 +283,67 @@ def main():
         print(config.to_json())
         return
 
+    if args.command in ("report-extract", "report-inspect"):
+        from .report_parser import ReportParser
+        report_parser = ReportParser()
+        try:
+            report_model = report_parser.parse(args.path)
+        except Exception as e:
+            print(f"[ERROR] Failed to parse PBIP report: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        if args.command == "report-extract":
+            indent = args.indent if args.indent > 0 else None
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(report_model.to_dict(), f, indent=indent, ensure_ascii=False)
+            print(f"[SUCCESS] Report presentation metadata successfully extracted!")
+            print(f" -> Output written to: {output_path.resolve()}")
+            print(f" -> Format: {report_model.format} | Pages: {report_model.summary.total_pages} | Visuals: {report_model.summary.total_visuals}")
+            return
+
+        elif args.command == "report-inspect":
+            print("=" * 70)
+            print(f"PBIP REPORT: {report_model.report_name} (Format: {report_model.format})")
+            print("=" * 70)
+            print(f"Pages: {report_model.summary.total_pages} ({report_model.summary.visible_pages} visible, {report_model.summary.hidden_pages} hidden) | Total Visuals: {report_model.summary.total_visuals}")
+            print(f"Visual types: {report_model.summary.visual_types_distribution}")
+
+            for p in report_model.pages:
+                hidden_tag = " [HIDDEN]" if p.is_hidden else ""
+                type_tag = f" [{p.page_type}]" if p.page_type != "NORMAL" else ""
+                print(f"\nPAGE: '{p.display_name}' (ID: {p.page_id}){type_tag}{hidden_tag} - Size: {p.width}x{p.height}")
+                if p.visuals:
+                    first_cc = p.visuals[0].calculation_context
+                    if first_cc.locked_active_filters:
+                        locked_strs = [f"{f.field} {f.default_value}" for f in first_cc.locked_active_filters]
+                        print(f"  * Locked Active Page Filters ({len(first_cc.locked_active_filters)}): {', '.join(locked_strs)}")
+                    if first_cc.unlocked_available_filters:
+                        unlocked_strs = [f"{f.field} (default: {f.default_value})" for f in first_cc.unlocked_available_filters]
+                        print(f"  * Unlocked Page Filters ({len(first_cc.unlocked_available_filters)}): {', '.join(unlocked_strs)}")
+                    if first_cc.page_slicers:
+                        slicer_strs = [s.model_key for s in first_cc.page_slicers]
+                        print(f"  * Page Slicers ({len(first_cc.page_slicers)}): {', '.join(slicer_strs)}")
+
+                    print(f"  * Visuals ({len(p.visuals)}):")
+                    for v in p.visuals:
+                        pos_str = f"Center: ({v.spatial_position.center_x}, {v.spatial_position.center_y}) in {v.spatial_position.zone}" if v.spatial_position else "No position"
+                        slicer_tag = " [SLICER]" if v.is_slicer else ""
+                        print(f"    - [{v.visual_type}]{slicer_tag} \"{v.title}\" | {pos_str}")
+                        cc = v.calculation_context
+                        if cc.evaluated_metrics:
+                            m_strs = [f"{m.model_key}{f' ({m.aggregation})' if m.aggregation else ''}" for m in cc.evaluated_metrics]
+                            print(f"        Evaluated Metrics: {', '.join(m_strs)}")
+                        if cc.slicing_coordinates:
+                            c_strs = [f"{c.model_key} [{c.role}]" for c in cc.slicing_coordinates]
+                            print(f"        Slicing Coordinates: {', '.join(c_strs)}")
+                        if cc.visual_active_filters:
+                            f_strs = [f"{f.field} ({f.condition})" for f in cc.visual_active_filters]
+                            print(f"        Visual Active Filters: {', '.join(f_strs)}")
+            print("=" * 70)
+            return
+
     config = _load_cli_config(args, getattr(args, "path", None))
 
     if getattr(args, "print_config", False):
@@ -267,10 +361,17 @@ def main():
             config.measures_subdir = args.measures_dir
         if args.functions_dir is not None:
             config.functions_subdir = args.functions_dir
+        if getattr(args, "visuals_dir", None) is not None:
+            config.visuals_subdir = args.visuals_dir
+        if getattr(args, "report_path", None) is not None:
+            config.report_path = args.report_path
+        if getattr(args, "no_visuals", False):
+            config.include_visual_docs = False
         if args.no_frontmatter:
             config.include_table_yaml_frontmatter = False
             config.include_measure_yaml_frontmatter = False
             config.include_function_yaml_frontmatter = False
+            config.include_visual_yaml_frontmatter = False
         if args.no_m_code:
             config.include_table_m_code = False
 
@@ -280,12 +381,17 @@ def main():
             table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
             measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
             function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
+            visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir)]
             print(f"[SUCCESS] Documentation successfully generated in '{config.output_dir}'!")
             print(f" -> Index: {config.output_dir}/INDEX.md")
             print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({config.output_dir}/{config.tables_subdir}/)")
             print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({config.output_dir}/{config.measures_subdir}/)")
             if function_docs:
                 print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({config.output_dir}/{config.functions_subdir}/)")
+            if visual_docs:
+                print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({config.output_dir}/{config.visuals_subdir}/)")
+            elif not config.include_visual_docs:
+                print(f" -> Visuals: Disabled (--no-visuals)")
             print(f" -> Auto Date Tables Excluded: {'Yes (default)' if config.exclude_auto_date_tables else 'No (included)'}")
             print(f" -> Inherited Entities Published: {'Yes' if config.include_inherited_entities else 'No (out of scope by default)'}")
             if config.base_doc_url:

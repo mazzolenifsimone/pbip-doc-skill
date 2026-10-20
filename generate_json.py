@@ -13,6 +13,6 @@ if __name__ == "__main__":
         sys.argv.extend(["extract", "-h"])
     elif sys.argv[1] in ("-h", "--help"):
         sys.argv = [sys.argv[0], "extract", "--help"]
-    elif sys.argv[1] not in ("extract", "inspect", "docgen", "config"):
+    elif sys.argv[1] not in ("extract", "inspect", "docgen", "config", "report-extract", "report-inspect"):
         sys.argv.insert(1, "extract")
     main()
