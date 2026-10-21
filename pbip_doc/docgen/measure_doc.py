@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..dax_formatter import format_dax
 
 
@@ -16,10 +16,19 @@ class MeasureDocBuilder:
     Builds modular markdown chapters for a single DAX measure in the semantic model.
     """
 
-    def __init__(self, measure_data: Dict[str, Any], full_model: Dict[str, Any], config: Optional[DocGenConfig] = None):
+    def __init__(
+        self,
+        measure_data: Dict[str, Any],
+        full_model: Dict[str, Any],
+        config: Optional[DocGenConfig] = None,
+        project_name: Optional[str] = None,
+    ):
         self.measure = measure_data
         self.model = full_model
         self.config = config or DocGenConfig()
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or full_model.get("project_name") or full_model.get("model_name")
+        )
         self.name = measure_data.get("name", "UnnamedMeasure")
         self.table = measure_data.get("table", "Model")
         self.depth = measure_data.get("calculation_depth", 0)
@@ -104,6 +113,8 @@ class MeasureDocBuilder:
             sanitize_filename(self.table),
             sanitize_filename(self.name),
         ]
+        if self.project_name:
+            tags.append(sanitize_filename(self.project_name))
         if self.depth == 0:
             tags.append("base_measure")
         else:
@@ -113,6 +124,7 @@ class MeasureDocBuilder:
 
         frontmatter_data = {
             "title": f"Measure: [{self.name}]",
+            "pbip_project": self.project_name,
             "entity_name": self.name,
             "doc_type": "dax_measure",
             "table_name": self.table,

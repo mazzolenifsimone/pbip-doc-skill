@@ -6,11 +6,11 @@ and complete canvas filter context (locked active filters, unlocked interactive 
 100% Vanilla Python standard library.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple, Set
 from pathlib import Path
 
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename
+from .utils import format_yaml_frontmatter, sanitize_filename, clean_project_name
 from ..report_schema import (
     PageDefinition,
     VisualDefinition,
@@ -88,12 +88,42 @@ class PageVisualDocBuilder:
         config: Optional[DocGenConfig] = None,
         known_measure_keys: Optional[set] = None,
         known_table_names: Optional[set] = None,
+        project_name: Optional[str] = None,
+        model_tables: Optional[List[Dict[str, Any]]] = None,
+        model_measures: Optional[List[Dict[str, Any]]] = None,
     ):
         self.page = page
         self.report = report_model
         self.config = config or DocGenConfig()
-        self.known_measure_keys = known_measure_keys or set()
-        self.known_table_names = known_table_names or set()
+        self.model_tables = model_tables or []
+        self.model_measures = model_measures or []
+        self.table_map: Dict[str, Dict[str, Any]] = {
+            t.get("name"): t for t in self.model_tables if t.get("name")
+        }
+        self.measure_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for m in self.model_measures:
+            m_name = m.get("name")
+            m_tbl = m.get("table") or "Model"
+            if m_name:
+                self.measure_map[(m_tbl, m_name)] = m
+                self.measure_map[("", m_name)] = m
+
+        self.known_measure_keys = known_measure_keys or (
+            {(m.get("table"), m.get("name")) for m in self.model_measures}
+            | {m.get("name") for m in self.model_measures}
+        )
+        self.known_table_names = known_table_names or set(self.table_map.keys())
+
+        rep_name = getattr(report_model, "report_name", None) if report_model else None
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or rep_name
+        )
+
+        # Target dataset name from config or parsed definition.pbir
+        self.target_dataset_name = (
+            self.config.report_dataset_name
+            or getattr(self.report, "target_dataset_name", None)
+        )
 
     def build_markdown(self) -> str:
         """Assembles the modular markdown document for this report page."""
@@ -130,6 +160,7 @@ class PageVisualDocBuilder:
 
         data = {
             "title": f"Report Page: {self.page.display_name}",
+            "pbip_project": self.project_name,
             "doc_type": "report_page_visuals",
             "page_id": self.page.page_id,
             "display_name": self.page.display_name,
@@ -144,6 +175,7 @@ class PageVisualDocBuilder:
                 "report_page",
                 "visuals",
                 "filter_context",
+                sanitize_filename(self.project_name),
                 sanitize_filename(self.page.display_name),
                 self.report.format,
             ],
@@ -480,28 +512,98 @@ class PageVisualDocBuilder:
         return "\n".join(lines)
 
     def _format_metric_link(self, metric: EvaluatedMetric) -> str:
-        """Formats evaluated metric as clickable link to measure document or table document."""
+        """Formats evaluated metric as clickable link to measure document or external model."""
         if not self.config.include_markdown_links:
             return f"`{metric.model_key}`"
 
-        # If it's a measure
-        if metric.field_type == "MEASURE" or (metric.table, metric.field) in self.known_measure_keys or metric.model_key in self.known_measure_keys:
+        measure_data = self.measure_map.get((metric.table, metric.field)) or self.measure_map.get(("", metric.field))
+
+        is_measure = (
+            metric.field_type == "MEASURE"
+            or (metric.table, metric.field) in self.known_measure_keys
+            or metric.model_key in self.known_measure_keys
+            or metric.field in self.known_measure_keys
+            or bool(measure_data)
+        )
+
+        if is_measure:
+            # 1. Local published measure
+            if measure_data and self.config.is_measure_published(measure_data):
+                url = self.config.resolve_measure_url_from_visual(metric.table, metric.field)
+                return f"[{metric.model_key}]({url})"
+
+            # 2. Local measure dictionary marked as external/inherited
+            if measure_data:
+                ext_url = self.config.resolve_external_measure_url(measure_data, self.model_tables)
+                if ext_url:
+                    return f"[{metric.model_key}]({ext_url}) *(External)*"
+                return f"`[{metric.model_key}]` *(External)*"
+
+            # 3. External resolution by name (via external_doc_paths or external_docs_base_url)
+            ext_url = self.config.resolve_external_measure_url_by_name(metric.field, metric.table, self.target_dataset_name)
+            if ext_url:
+                return f"[{metric.model_key}]({ext_url}) *(External)*"
+
+            # 4. Fallback:
+            if self.measure_map:
+                return f"`{metric.model_key}`"
             url = self.config.resolve_measure_url_from_visual(metric.table, metric.field)
             return f"[{metric.model_key}]({url})"
 
         # If it's an implicit aggregation over a column
         if metric.table and metric.table != "Unknown":
+            table_data = self.table_map.get(metric.table)
+            if table_data and self.config.is_table_published(table_data):
+                t_url = self.config.resolve_table_url_from_visual(metric.table)
+                return f"[{metric.model_key}]({t_url})"
+
+            ext_url = (self.config.resolve_external_table_url(table_data) if table_data else None) or self.config.resolve_external_table_url_by_name(metric.table, self.target_dataset_name)
+            if ext_url:
+                return f"[{metric.model_key}]({ext_url})"
+
+            if self.table_map:
+                return f"`{metric.model_key}`"
+
             t_url = self.config.resolve_table_url_from_visual(metric.table)
             return f"[{metric.model_key}]({t_url})"
 
         return f"`{metric.model_key}`"
 
     def _format_table_link(self, table_name: str) -> str:
-        """Formats table reference as clickable link to table document."""
+        """Formats table reference as clickable link to table document or external model."""
         if not table_name or table_name == "Unknown":
             return "`Unknown`"
         if not self.config.include_markdown_links:
             return f"`{table_name}`"
 
+        table_data = self.table_map.get(table_name)
+
+        # 1. Local published table
+        if table_data and self.config.is_table_published(table_data):
+            t_url = self.config.resolve_table_url_from_visual(table_name)
+            return f"[{table_name}]({t_url})"
+
+        # 2. Local table dictionary marked as external/inherited
+        if table_data:
+            ext_url = self.config.resolve_external_table_url(table_data)
+            if ext_url:
+                badge = " *(Inherited Entity)*" if table_data.get("is_inherited") else " *(External)*"
+                return f"[{table_name}]({ext_url}){badge}"
+            elif table_data.get("is_inherited"):
+                return f"`{table_name}` *(Inherited Entity)*"
+            elif not self.config.is_table_published(table_data):
+                return f"`{table_name}`"
+
+        # 3. External resolution by name (via external_doc_paths or external_docs_base_url with target_dataset_name)
+        ext_url = self.config.resolve_external_table_url_by_name(table_name, self.target_dataset_name)
+        if ext_url:
+            return f"[{table_name}]({ext_url}) *(External)*"
+
+        # 4. Fallback:
+        # If we have a local table catalog and the table was not published/external: avoid 404
+        if self.table_map:
+            return f"`{table_name}`"
+
+        # Standalone report without model context: fallback to default local link
         t_url = self.config.resolve_table_url_from_visual(table_name)
         return f"[{table_name}]({t_url})"

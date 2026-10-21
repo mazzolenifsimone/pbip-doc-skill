@@ -25,6 +25,7 @@ from .report_schema import (
     ReportSummary,
     PBIPReportModel,
 )
+from .docgen.utils import clean_project_name
 
 
 SLICER_VISUAL_TYPES = {
@@ -328,13 +329,63 @@ class ReportParser:
             visual_types_distribution=visual_dist,
         )
 
+        target_dataset_name, dataset_reference = self._parse_dataset_reference(report_dir)
+
         return PBIPReportModel(
             report_name=report_name,
             format=report_format,
             source_path=str(report_dir),
             summary=summary,
             pages=pages,
+            target_dataset_name=target_dataset_name,
+            dataset_reference=dataset_reference,
         )
+
+    def _parse_dataset_reference(self, report_dir: Path) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Parses definition.pbir if present to discover the bound or remote semantic model dataset.
+        Supports byPath (sibling or relative semantic models) and byConnection (DirectQuery/Live to Fabric or Power BI Service).
+        """
+        candidates = [
+            report_dir / "definition.pbir",
+            report_dir / "definition" / "definition.pbir",
+            report_dir.parent / f"{report_dir.stem}.pbir",
+        ]
+        pbir_path = next((c for c in candidates if c.is_file()), None)
+        if not pbir_path:
+            return None, None
+
+        try:
+            with open(pbir_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            ds_ref = data.get("datasetReference")
+            if not isinstance(ds_ref, dict):
+                return None, None
+
+            # 1. byPath: relative path to .SemanticModel
+            by_path = ds_ref.get("byPath")
+            if isinstance(by_path, dict) and "path" in by_path:
+                rel_path = by_path["path"]
+                p = Path(rel_path)
+                stem = p.stem or p.name
+                model_name = clean_project_name(stem)
+                return model_name, ds_ref
+
+            # 2. byConnection: connectionString, pbiModelDatabaseName
+            by_conn = ds_ref.get("byConnection")
+            if isinstance(by_conn, dict):
+                model_name = by_conn.get("pbiModelDatabaseName")
+                if not model_name:
+                    conn_str = by_conn.get("connectionString", "")
+                    m = re.search(r'Initial\s+Catalog\s*=\s*([^;]+)', conn_str, re.IGNORECASE)
+                    if m:
+                        model_name = m.group(1).strip()
+                if model_name:
+                    return clean_project_name(model_name), ds_ref
+
+            return None, ds_ref
+        except Exception:
+            return None, None
 
     def _resolve_report_target(self, target_path: str) -> Tuple[Path, str]:
         """Resolves directory and determines whether format is PBIR or Legacy."""

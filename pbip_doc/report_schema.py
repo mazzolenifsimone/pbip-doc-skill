@@ -138,6 +138,8 @@ class PBIPReportModel:
     source_path: str
     summary: ReportSummary = field(default_factory=ReportSummary)
     pages: List[PageDefinition] = field(default_factory=list)
+    target_dataset_name: Optional[str] = None
+    dataset_reference: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert entire report model to standard Python dictionary ready for JSON dump."""

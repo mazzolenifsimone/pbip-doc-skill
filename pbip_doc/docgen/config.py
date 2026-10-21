@@ -74,8 +74,10 @@ class DocGenConfig:
     visuals_subdir: str = "visuals"
     visual_assets_subdir: str = "assets"
     report_path: Optional[str] = None
+    report_dataset_name: Optional[str] = None
 
     # General options
+    project_name: Optional[str] = None
     output_dir: str = "docs"
     tables_subdir: str = "tables"
     measures_subdir: str = "measures"
@@ -341,6 +343,125 @@ class DocGenConfig:
 
         clean_tbl = sanitize_filename(remote_tbl_name) if self.sanitize_filenames else remote_tbl_name
         clean_m = sanitize_filename(remote_m_name) if self.sanitize_filenames else remote_m_name
+        meas_sub = self.measures_subdir.strip("/\\")
+        filename = f"{clean_m}.md"
+        if meas_sub:
+            return join_doc_path(base_url, meas_sub, clean_tbl, filename)
+        return join_doc_path(base_url, clean_tbl, filename)
+
+    def resolve_external_table_url_by_name(
+        self,
+        table_name: str,
+        target_model_name: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Resolves the documentation URL/path for an external table given its name
+        and an optional target model / dataset name.
+        """
+        if not table_name:
+            return None
+        tbl_clean = table_name.strip()
+        base_url = None
+
+        # 1. Direct match of table_name in external_doc_paths
+        if tbl_clean in self.external_doc_paths:
+            direct_val = self.external_doc_paths[tbl_clean]
+            if direct_val.endswith(".md"):
+                return direct_val
+            base_url = direct_val
+        else:
+            for k, v in self.external_doc_paths.items():
+                if k.strip().lower() == tbl_clean.lower():
+                    if v.endswith(".md"):
+                        return v
+                    base_url = v
+                    break
+
+        # 2. Match target_model_name in external_doc_paths
+        effective_model = target_model_name or self.report_dataset_name
+        if not base_url and effective_model:
+            mod_clean = effective_model.strip()
+            if mod_clean in self.external_doc_paths:
+                base_url = self.external_doc_paths[mod_clean]
+            else:
+                for k, v in self.external_doc_paths.items():
+                    if k.strip().lower() == mod_clean.lower():
+                        base_url = v
+                        break
+
+        # 3. Global external_docs_base_url (<external_docs_base_url>/<effective_model>)
+        if not base_url and self.external_docs_base_url:
+            ref_folder = effective_model or tbl_clean
+            folder_clean = str(ref_folder).strip().strip("'\"")
+            folder_name = sanitize_filename(folder_clean) if self.sanitize_filenames else folder_clean
+            base_url = join_doc_path(self.external_docs_base_url, folder_name)
+
+        if not base_url:
+            return None
+
+        clean_tbl = sanitize_filename(tbl_clean) if self.sanitize_filenames else tbl_clean
+        tables_sub = self.tables_subdir.strip("/\\")
+        filename = f"{clean_tbl}.md"
+        return join_doc_path(base_url, tables_sub, filename) if tables_sub else join_doc_path(base_url, filename)
+
+    def resolve_external_measure_url_by_name(
+        self,
+        measure_name: str,
+        table_name: Optional[str] = None,
+        target_model_name: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Resolves the documentation URL/path for an external measure given its name,
+        host table name, and optional target model / dataset name.
+        """
+        if not measure_name:
+            return None
+        m_clean = measure_name.strip()
+        tbl_clean = (table_name or "Model").strip()
+        base_url = None
+
+        # 1. Direct match of measure_name in external_doc_paths
+        if m_clean in self.external_doc_paths:
+            direct_val = self.external_doc_paths[m_clean]
+            if direct_val.endswith(".md"):
+                return direct_val
+            base_url = direct_val
+        else:
+            for k, v in self.external_doc_paths.items():
+                if k.strip().lower() == m_clean.lower():
+                    if v.endswith(".md"):
+                        return v
+                    base_url = v
+                    break
+
+        # 2. Match target_model_name in external_doc_paths
+        effective_model = target_model_name or self.report_dataset_name
+        if not base_url and effective_model:
+            mod_clean = effective_model.strip()
+            if mod_clean in self.external_doc_paths:
+                base_url = self.external_doc_paths[mod_clean]
+            else:
+                for k, v in self.external_doc_paths.items():
+                    if k.strip().lower() == mod_clean.lower():
+                        base_url = v
+                        break
+
+        # 3. Match table_name in external_doc_paths
+        if not base_url and tbl_clean in self.external_doc_paths:
+            base_url = self.external_doc_paths[tbl_clean]
+
+        # 4. Global external_docs_base_url (<external_docs_base_url>/<effective_model>)
+        if not base_url and self.external_docs_base_url:
+            ref_folder = effective_model or tbl_clean
+            folder_clean = str(ref_folder).strip().strip("'\"")
+            folder_name = sanitize_filename(folder_clean) if self.sanitize_filenames else folder_clean
+            base_url = join_doc_path(self.external_docs_base_url, folder_name)
+
+        if not base_url:
+            return None
+
+        clean_tbl = sanitize_filename(tbl_clean) if self.sanitize_filenames else tbl_clean
+        clean_m = sanitize_filename(m_clean) if self.sanitize_filenames else m_clean
         meas_sub = self.measures_subdir.strip("/\\")
         filename = f"{clean_m}.md"
         if meas_sub:

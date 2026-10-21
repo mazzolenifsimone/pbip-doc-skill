@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..dax_formatter import format_dax
 
 
@@ -16,10 +16,19 @@ class TableDocBuilder:
     Builds modular markdown chapters for a single table in the semantic model.
     """
 
-    def __init__(self, table_data: Dict[str, Any], full_model: Dict[str, Any], config: Optional[DocGenConfig] = None):
+    def __init__(
+        self,
+        table_data: Dict[str, Any],
+        full_model: Dict[str, Any],
+        config: Optional[DocGenConfig] = None,
+        project_name: Optional[str] = None,
+    ):
         self.table = table_data
         self.model = full_model
         self.config = config or DocGenConfig()
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or full_model.get("project_name") or full_model.get("model_name")
+        )
         self.name = table_data.get("name", "UnnamedTable")
         self.role = table_data.get("role", "UNKNOWN")
         self.classification = table_data.get("classification_reasoning", {})
@@ -107,8 +116,12 @@ class TableDocBuilder:
             if not self.config.is_table_excluded(l)
         ]
 
+        if self.project_name:
+            tags.append(sanitize_filename(self.project_name))
+
         frontmatter_data = {
             "title": f"Table: {self.name}",
+            "pbip_project": self.project_name,
             "entity_name": self.name,
             "doc_type": "data_model_table",
             "role": self.role,

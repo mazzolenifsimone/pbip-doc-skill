@@ -17,7 +17,7 @@ from .function_doc import FunctionDocBuilder
 from .expression_doc import ExpressionDocBuilder
 from .index_doc import IndexDocBuilder
 from .visual_doc import PageVisualDocBuilder
-from .utils import sanitize_filename
+from .utils import sanitize_filename, clean_project_name
 from ..report_parser import ReportParser
 from ..report_schema import PBIPReportModel
 
@@ -45,11 +45,13 @@ class MarkdownDocGenerator:
         """
         data = self._load_model_dict(model_data)
         report_model = self._resolve_report(model_data)
+        project_name = self._resolve_project_name(model_data, data, report_model)
+        data["project_name"] = project_name
         documents: Dict[str, str] = {}
 
         # 1. Master Catalog (INDEX.md)
         if self.config.generate_index_file:
-            index_builder = IndexDocBuilder(data, self.config, report_model=report_model)
+            index_builder = IndexDocBuilder(data, self.config, report_model=report_model, project_name=project_name)
             documents["INDEX.md"] = index_builder.build_markdown()
 
         # 2. Table Documents (one markdown per table)
@@ -58,7 +60,7 @@ class MarkdownDocGenerator:
             if not self.config.is_table_published(table):
                 continue
             tbl_name = table.get("name")
-            tbl_builder = TableDocBuilder(table, data, self.config)
+            tbl_builder = TableDocBuilder(table, data, self.config, project_name=project_name)
             clean_tbl_name = sanitize_filename(tbl_name)
             tbl_filename = f"{clean_tbl_name}.md"
             doc_path = f"{tables_sub}/{tbl_filename}" if tables_sub else tbl_filename
@@ -70,7 +72,7 @@ class MarkdownDocGenerator:
             if not self.config.is_measure_published(measure):
                 continue
             meas_tbl = measure.get("table", "Model")
-            meas_builder = MeasureDocBuilder(measure, data, self.config)
+            meas_builder = MeasureDocBuilder(measure, data, self.config, project_name=project_name)
             clean_tbl_name = sanitize_filename(meas_tbl)
             clean_name = sanitize_filename(measure.get("name", "measure"))
             meas_filename = f"{clean_name}.md"
@@ -83,7 +85,7 @@ class MarkdownDocGenerator:
         # 4. Function Documents (one markdown per UDF function)
         functions_sub = self.config.functions_subdir.strip("/\\")
         for fn in data.get("functions", []):
-            fn_builder = FunctionDocBuilder(fn, data, self.config)
+            fn_builder = FunctionDocBuilder(fn, data, self.config, project_name=project_name)
             clean_name = sanitize_filename(fn.get("name", "function"))
             fn_filename = f"{clean_name}.md"
             doc_path = f"{functions_sub}/{fn_filename}" if functions_sub else fn_filename
@@ -94,7 +96,7 @@ class MarkdownDocGenerator:
             expressions_sub = self.config.expressions_subdir.strip("/\\")
             expr_list = data.get("expressions") or data.get("shared_queries") or []
             for expr in expr_list:
-                expr_builder = ExpressionDocBuilder(expr, data, self.config)
+                expr_builder = ExpressionDocBuilder(expr, data, self.config, project_name=project_name)
                 clean_name = sanitize_filename(expr.get("query_name", "expression"))
                 expr_filename = f"{clean_name}.md"
                 doc_path = f"{expressions_sub}/{expr_filename}" if expressions_sub else expr_filename
@@ -117,6 +119,9 @@ class MarkdownDocGenerator:
                     config=self.config,
                     known_measure_keys=known_measure_keys,
                     known_table_names=known_table_names,
+                    project_name=project_name,
+                    model_tables=data.get("tables", []),
+                    model_measures=data.get("measures", []),
                 )
                 clean_page_name = sanitize_filename(page.display_name)
                 page_filename = f"{clean_page_name}.md"
@@ -220,3 +225,43 @@ class MarkdownDocGenerator:
         parser = PBIPParser(config=self.config)
         model_obj = parser.parse(str(path), config=self.config)
         return model_obj.to_dict()
+
+    def _resolve_project_name(
+        self,
+        model_input: Union[Dict[str, Any], str, Path],
+        data: Dict[str, Any],
+        report_model: Optional[PBIPReportModel],
+    ) -> str:
+        """
+        Resolves the PBIP project name from explicit config, input path,
+        report metadata, or semantic model data.
+        """
+        if self.config.project_name:
+            return clean_project_name(self.config.project_name)
+
+        # 1. From model_input path if provided as string or Path
+        if isinstance(model_input, (str, Path)):
+            p = Path(model_input)
+            stem = p.stem
+            cleaned = clean_project_name(stem)
+            if cleaned and cleaned not in ("model", "definition", "PBIP"):
+                return cleaned
+
+            parent_cleaned = clean_project_name(p.parent.name)
+            if parent_cleaned and parent_cleaned not in ("definition", ".", "PBIP"):
+                return parent_cleaned
+
+        # 2. From report_model
+        if report_model and getattr(report_model, "report_name", None):
+            cleaned = clean_project_name(report_model.report_name)
+            if cleaned and cleaned != "PBIP":
+                return cleaned
+
+        # 3. From semantic model data
+        m_name = data.get("model_name")
+        if m_name:
+            cleaned = clean_project_name(m_name)
+            if cleaned and cleaned != "PBIP":
+                return cleaned
+
+        return "PBIP"

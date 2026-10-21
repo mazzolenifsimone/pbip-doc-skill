@@ -64,8 +64,11 @@ class TestMarkdownDocGenerator(unittest.TestCase):
         self.assertIn("tables/FactOrders.md", docs)
         self.assertIn("measures/FactOrders/Total_Sales.md", docs)
 
+        self.assertIn("pbip_project: TestModel", docs["INDEX.md"])
+
         fact_doc = docs["tables/FactOrders.md"]
         self.assertTrue(fact_doc.startswith("---"))
+        self.assertIn("pbip_project: TestModel", fact_doc)
         self.assertIn("doc_type: data_model_table", fact_doc)
         self.assertIn("role: FACT", fact_doc)
         self.assertIn("# Table: `FactOrders`", fact_doc)
@@ -75,6 +78,7 @@ class TestMarkdownDocGenerator(unittest.TestCase):
 
         measure_doc = docs["measures/FactOrders/Total_Sales.md"]
         self.assertTrue(measure_doc.startswith("---"))
+        self.assertIn("pbip_project: TestModel", measure_doc)
         self.assertIn("doc_type: dax_measure", measure_doc)
         self.assertIn("calculation_depth: 0", measure_doc)
         self.assertIn("```dax", measure_doc)
@@ -1149,6 +1153,8 @@ class TestExpressionDocGen(unittest.TestCase):
         self.assertIn("INDEX.md", docs)
         self.assertIn("tables/FactOrders.md", docs)
         self.assertIn("expressions/Staging_Orders.md", docs)
+        self.assertIn("pbip_project: TestModel", docs["INDEX.md"])
+        self.assertIn("pbip_project: TestModel", docs["expressions/Staging_Orders.md"])
         self.assertIn("## Power Query Expressions & Shared ETL Queries", docs["INDEX.md"])
         self.assertIn("Staging_Orders", docs["INDEX.md"])
 
@@ -2376,6 +2382,69 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
             meas_url,
             "https://docs.company.internal/bi/models/RetailAnalytics/measures/Store/StoreCount.md",
         )
+
+
+class TestPBIPProjectFrontmatter(unittest.TestCase):
+    def test_clean_project_name_utility(self):
+        from pbip_doc.docgen.utils import clean_project_name
+        self.assertEqual(clean_project_name("RetailAnalytics.SemanticModel"), "RetailAnalytics")
+        self.assertEqual(clean_project_name("SalesDashboard.Report"), "SalesDashboard")
+        self.assertEqual(clean_project_name("FinancialReport.pbip"), "FinancialReport")
+        self.assertEqual(clean_project_name("CoreModel"), "CoreModel")
+        self.assertEqual(clean_project_name(""), "PBIP")
+        self.assertEqual(clean_project_name(None), "PBIP")
+
+    def test_explicit_project_name_in_frontmatters(self):
+        sample_model = {
+            "model_name": "FallbackModelName",
+            "source_format": "TMDL",
+            "tables": [
+                {
+                    "name": "DimStore",
+                    "role": "DIMENSION",
+                    "columns": [{"name": "StoreID", "data_type": "int64"}],
+                }
+            ],
+            "measures": [
+                {
+                    "name": "StoreCount",
+                    "table": "DimStore",
+                    "dax_expression": "COUNTROWS(DimStore)",
+                    "calculation_depth": 0,
+                }
+            ],
+            "functions": [
+                {
+                    "name": "fx_FormatCurrency",
+                    "expression": "FORMAT(val, '$#,##0')",
+                    "parameters": [{"name": "val", "data_type": "DOUBLE"}],
+                }
+            ],
+            "expressions": [
+                {
+                    "query_name": "Staging_Store",
+                    "is_staging": True,
+                    "full_m_expression": "let Source = 1 in Source",
+                    "steps": [],
+                }
+            ],
+        }
+
+        cfg = DocGenConfig(project_name="Enterprise_ERP_BI")
+        generator = MarkdownDocGenerator(cfg)
+        docs = generator.generate_all_documents(sample_model)
+
+        self.assertIn("INDEX.md", docs)
+        self.assertIn("tables/DimStore.md", docs)
+        self.assertIn("measures/DimStore/StoreCount.md", docs)
+        self.assertIn("functions/fx_FormatCurrency.md", docs)
+        self.assertIn("expressions/Staging_Store.md", docs)
+
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["INDEX.md"])
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["tables/DimStore.md"])
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["measures/DimStore/StoreCount.md"])
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["functions/fx_FormatCurrency.md"])
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["expressions/Staging_Store.md"])
 
 
 if __name__ == "__main__":

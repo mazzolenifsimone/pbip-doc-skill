@@ -34,6 +34,8 @@ from pbip_doc.report_parser import (
     _parse_where_condition,
     _extract_field_details,
 )
+from pbip_doc.docgen.config import DocGenConfig
+from pbip_doc.docgen.visual_doc import PageVisualDocBuilder
 
 
 class TestReportParser(unittest.TestCase):
@@ -1064,8 +1066,14 @@ class TestReportVisualDocgen(unittest.TestCase):
         self.assertIn("visuals/assets/Overview/v1.svg", docs)
         self.assertIn("## Report Presentation & Visuals: `AdventureWorks`", docs["INDEX.md"])
 
+        # Check pbip_project frontmatter across all document types
+        self.assertIn("pbip_project: AdventureWorks", docs["INDEX.md"])
+        self.assertIn("pbip_project: AdventureWorks", docs["tables/Sales.md"])
+        self.assertIn("pbip_project: AdventureWorks", docs["measures/Sales/Cost.md"])
+
         # Check visual markdown contains side-by-side table, img tag, indicative position, filter perimeter
         overview_md = docs["visuals/Overview.md"]
+        self.assertIn("pbip_project: AdventureWorks", overview_md)
         self.assertIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} | {VisualDocLabels.COL_SPECS_METRICS_PERIMETER} |", overview_md)
         self.assertIn('<img src="assets/Overview/v1.svg"', overview_md)
         self.assertIn("**Indicative Position**:", overview_md)
@@ -1170,7 +1178,196 @@ class TestReportVisualDocgen(unittest.TestCase):
         self.assertIn(f"  - **{VisualDocLabels.LABEL_VISUAL_LEVEL_FILTERS}**:", md_text)
 
 
+class TestReportExternalSourcesLinking(unittest.TestCase):
+    """
+    Tests external sources resolution and linking in report visual documentation.
+    Validates definition.pbir datasetReference parsing, inherited tables, and external measures.
+    """
+
+    def test_pbir_dataset_reference_parsing_by_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rep_dir = Path(tmpdir) / "SalesAnalytics.Report"
+            rep_dir.mkdir()
+            (rep_dir / "definition" / "pages" / "p1").mkdir(parents=True)
+            with open(rep_dir / "definition" / "pages" / "pages.json", "w", encoding="utf-8") as f:
+                json.dump([{"name": "p1"}], f)
+            with open(rep_dir / "definition" / "pages" / "p1" / "page.json", "w", encoding="utf-8") as f:
+                json.dump({"name": "p1", "displayName": "Summary"}, f)
+
+            # definition.pbir with byPath
+            pbir_content = {
+                "datasetReference": {
+                    "byPath": {"path": "../CentralSupplyChain.SemanticModel"}
+                }
+            }
+            with open(rep_dir / "definition.pbir", "w", encoding="utf-8") as f:
+                json.dump(pbir_content, f)
+
+            parser = ReportParser()
+            model = parser.parse(str(rep_dir))
+            self.assertEqual(model.target_dataset_name, "CentralSupplyChain")
+            self.assertIsNotNone(model.dataset_reference)
+
+    def test_pbir_dataset_reference_parsing_by_connection(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rep_dir = Path(tmpdir) / "DirectQueryReport.Report"
+            rep_dir.mkdir()
+            (rep_dir / "definition" / "pages" / "p1").mkdir(parents=True)
+            with open(rep_dir / "definition" / "pages" / "pages.json", "w", encoding="utf-8") as f:
+                json.dump([{"name": "p1"}], f)
+            with open(rep_dir / "definition" / "pages" / "p1" / "page.json", "w", encoding="utf-8") as f:
+                json.dump({"name": "p1", "displayName": "Executive"}, f)
+
+            # definition.pbir with byConnection
+            pbir_content = {
+                "datasetReference": {
+                    "byConnection": {
+                        "connectionString": "Data Source=powerbi://api.powerbi.com/v1.0/org;Initial Catalog=FabricWarehouse;Integrated Security=ClaimsToken",
+                        "pbiModelDatabaseName": "FabricWarehouse",
+                    }
+                }
+            }
+            with open(rep_dir / "definition.pbir", "w", encoding="utf-8") as f:
+                json.dump(pbir_content, f)
+
+            parser = ReportParser()
+            model = parser.parse(str(rep_dir))
+            self.assertEqual(model.target_dataset_name, "FabricWarehouse")
+
+    def test_visual_doc_links_to_external_sources(self):
+        """Verifies that external and inherited tables/measures link to external docs instead of broken 404s."""
+        from pbip_doc.report_schema import PageDefinition, VisualDefinition, CalculationContext, EvaluatedMetric, SlicingCoordinate
+
+        calc = CalculationContext(
+            evaluated_metrics=[
+                EvaluatedMetric(table="DimRemoteStore", field="RemoteRevenue", field_type="MEASURE", role="Values", model_key="DimRemoteStore[RemoteRevenue]"),
+            ],
+            slicing_coordinates=[
+                SlicingCoordinate(table="DimRemoteStore", field="StoreCountry", model_key="DimRemoteStore[StoreCountry]", role="Rows"),
+            ],
+        )
+        visual = VisualDefinition(
+            visual_id="v_external",
+            visual_type="barChart",
+            title="External Store Sales",
+            calculation_context=calc,
+        )
+        page = PageDefinition(
+            page_id="page_ext",
+            display_name="External Overview",
+            page_number=1,
+            visuals=[visual],
+        )
+
+        mock_report = PBIPReportModel(
+            report_name="ThinReport",
+            format="PBIR",
+            source_path="c:/test/ThinReport.Report",
+            target_dataset_name="RetailAS",
+            pages=[page],
+        )
+
+        model_tables = [
+            {
+                "name": "DimRemoteStore",
+                "is_inherited": True,
+                "inherited_model_name": "RetailAS",
+                "inherited_entity_name": "DimRemoteStore",
+            }
+        ]
+        model_measures = [
+            {
+                "name": "RemoteRevenue",
+                "table": "DimRemoteStore",
+                "is_external_measure": True,
+                "inherited_model_name": "RetailAS",
+                "dax_expression": 'EXTERNALMEASURE("RemoteRevenue", DOUBLE, "DirectQuery to AS - RetailAS")',
+            }
+        ]
+
+        cfg = DocGenConfig(
+            external_docs_base_url="https://docs.company.internal/bi/models",
+            include_inherited_entities=False,  # Local files for inherited entities are NOT generated
+        )
+
+        builder = PageVisualDocBuilder(
+            page=page,
+            report_model=mock_report,
+            config=cfg,
+            model_tables=model_tables,
+            model_measures=model_measures,
+        )
+
+        md = builder.build_markdown()
+
+        # 1. Check table link points to external model URL
+        expected_table_url = "https://docs.company.internal/bi/models/RetailAS/tables/DimRemoteStore.md"
+        self.assertIn(f"[DimRemoteStore]({expected_table_url}) *(Inherited Entity)*", md)
+
+        # 2. Check measure link points to external measure URL
+        expected_measure_url = "https://docs.company.internal/bi/models/RetailAS/measures/DimRemoteStore/RemoteRevenue.md"
+        self.assertIn(f"[DimRemoteStore[RemoteRevenue]]({expected_measure_url}) *(External)*", md)
+
+    def test_visual_doc_fallback_when_external_not_configured(self):
+        """Verifies that unmapped external tables/measures render safely without emitting 404 links."""
+        from pbip_doc.report_schema import PageDefinition, VisualDefinition, CalculationContext, EvaluatedMetric, SlicingCoordinate
+
+        calc = CalculationContext(
+            evaluated_metrics=[
+                EvaluatedMetric(table="DimRemoteStore", field="RemoteRevenue", field_type="MEASURE", role="Values", model_key="DimRemoteStore[RemoteRevenue]"),
+            ],
+            slicing_coordinates=[
+                SlicingCoordinate(table="DimRemoteStore", field="StoreCountry", model_key="DimRemoteStore[StoreCountry]", role="Rows"),
+            ],
+        )
+        visual = VisualDefinition(
+            visual_id="v_external",
+            visual_type="barChart",
+            title="External Store Sales",
+            calculation_context=calc,
+        )
+        page = PageDefinition(
+            page_id="page_ext",
+            display_name="External Overview",
+            page_number=1,
+            visuals=[visual],
+        )
+
+        mock_report = PBIPReportModel(
+            report_name="ThinReport",
+            format="PBIR",
+            source_path="c:/test/ThinReport.Report",
+            target_dataset_name="RetailAS",
+            pages=[page],
+        )
+
+        model_tables = [
+            {"name": "DimRemoteStore", "is_inherited": True}
+        ]
+        model_measures = [
+            {"name": "RemoteRevenue", "table": "DimRemoteStore", "is_external_measure": True}
+        ]
+
+        cfg = DocGenConfig(include_inherited_entities=False)
+
+        builder = PageVisualDocBuilder(
+            page=page,
+            report_model=mock_report,
+            config=cfg,
+            model_tables=model_tables,
+            model_measures=model_measures,
+        )
+
+        md = builder.build_markdown()
+
+        # Should render safely without broken markdown link ../tables/DimRemoteStore.md
+        self.assertNotIn("../tables/DimRemoteStore.md", md)
+        self.assertIn("`DimRemoteStore` *(Inherited Entity)*", md)
+        self.assertIn("`[DimRemoteStore[RemoteRevenue]]` *(External)*", md)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
 

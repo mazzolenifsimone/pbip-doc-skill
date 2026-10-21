@@ -6,7 +6,7 @@ Vanilla Python implementation.
 
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..dax_formatter import format_dax
 
 
@@ -15,10 +15,19 @@ class FunctionDocBuilder:
     Builds modular markdown chapters for a single DAX User-Defined Function (UDF).
     """
 
-    def __init__(self, function_data: Dict[str, Any], full_model: Dict[str, Any], config: Optional[DocGenConfig] = None):
+    def __init__(
+        self,
+        function_data: Dict[str, Any],
+        full_model: Dict[str, Any],
+        config: Optional[DocGenConfig] = None,
+        project_name: Optional[str] = None,
+    ):
         self.fn = function_data
         self.model = full_model
         self.config = config or DocGenConfig()
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or full_model.get("project_name") or full_model.get("model_name")
+        )
         self.name = function_data.get("name", "UnnamedFunction")
         self.expression = function_data.get("expression", "")
         self.parameters = function_data.get("parameters", [])
@@ -77,6 +86,8 @@ class FunctionDocBuilder:
             "dax_udf_function",
             sanitize_filename(self.name),
         ]
+        if self.project_name:
+            tags.append(sanitize_filename(self.project_name))
         if not self.downstream_measures:
             tags.append("unused_function")
         else:
@@ -86,6 +97,7 @@ class FunctionDocBuilder:
 
         frontmatter_data = {
             "title": f"Function: {self.name}",
+            "pbip_project": self.project_name,
             "entity_name": self.name,
             "doc_type": "dax_udf_function",
             "return_type": self.return_type,

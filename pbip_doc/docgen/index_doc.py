@@ -7,7 +7,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 
 
 class IndexDocBuilder:
@@ -20,10 +20,15 @@ class IndexDocBuilder:
         model_data: Dict[str, Any],
         config: Optional[DocGenConfig] = None,
         report_model: Optional[Any] = None,
+        project_name: Optional[str] = None,
     ):
         self.model = model_data
         self.config = config or DocGenConfig()
         self.report_model = report_model
+        rep_name = getattr(report_model, "report_name", None) if report_model else None
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or model_data.get("project_name") or model_data.get("model_name") or rep_name
+        )
 
     def build_markdown(self) -> str:
         sections = []
@@ -42,6 +47,7 @@ class IndexDocBuilder:
         # 1. Frontmatter
         frontmatter = {
             "title": f"Semantic Model Documentation: {self.model.get('model_name')}",
+            "pbip_project": self.project_name,
             "doc_type": "semantic_model_catalog",
             "format": self.model.get("source_format"),
             "tables_count": len(valid_tables),
@@ -50,7 +56,7 @@ class IndexDocBuilder:
             "expressions_count": len(expr_list),
             "data_sources_count": len(self.model.get("data_sources_summary", [])),
             "excluded_tables_count": self.model.get("excluded_tables_count", 0),
-            "tags": ["semantic_model", "catalog", "pbip", self.model.get("model_name", "model")],
+            "tags": ["semantic_model", "catalog", "pbip", sanitize_filename(self.project_name), self.model.get("model_name", "model")],
         }
         if self.report_model and self.config.include_visual_docs:
             rep_pages = getattr(self.report_model, "pages", []) if hasattr(self.report_model, "pages") else self.report_model.get("pages", [])

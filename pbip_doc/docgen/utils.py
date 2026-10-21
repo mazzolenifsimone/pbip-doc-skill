@@ -46,6 +46,19 @@ def join_doc_path(base: str, *parts: str) -> str:
     return clean_base + "/" + "/".join(sub_parts)
 
 
+def clean_project_name(name: Any) -> str:
+    """
+    Normalizes a PBIP project name by stripping technical suffixes
+    such as .SemanticModel, .Report, or .pbip.
+    """
+    if not name:
+        return "PBIP"
+    clean = str(name).strip()
+    for suffix in [".SemanticModel", ".semanticmodel", ".Report", ".report", ".pbip", ".PBIP"]:
+        if clean.endswith(suffix):
+            clean = clean[:-len(suffix)]
+    return clean or "PBIP"
+
 
 def format_yaml_frontmatter(data: Dict[str, Any]) -> str:
     """

@@ -60,6 +60,12 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
                 k, v = item.split("=", 1)
                 config.external_doc_paths[k.strip()] = v.strip()
 
+    if getattr(args, "project_name", None):
+        config.project_name = args.project_name
+
+    if getattr(args, "report_dataset_name", None):
+        config.report_dataset_name = args.report_dataset_name
+
     return config
 
 
@@ -224,6 +230,16 @@ def main():
         action="store_true",
         help="Disable generation of scaled SVG canvas mini-maps for visual documentation",
     )
+    docgen_parser.add_argument(
+        "--project-name",
+        default=None,
+        help="Explicit PBIP project name override for frontmatter indexing",
+    )
+    docgen_parser.add_argument(
+        "--report-dataset-name",
+        default=None,
+        help="Explicit remote/bound semantic model dataset name for report visual table/measure links",
+    )
 
     # Command: config
     config_parser = subparsers.add_parser("config", help="Inspect, export or initialize configuration JSON files")
@@ -374,6 +390,10 @@ def main():
             config.include_visual_docs = False
         if getattr(args, "no_visual_svg_maps", False):
             config.include_visual_svg_maps = False
+        if getattr(args, "project_name", None) is not None:
+            config.project_name = args.project_name
+        if getattr(args, "report_dataset_name", None) is not None:
+            config.report_dataset_name = args.report_dataset_name
         if args.no_frontmatter:
             config.include_table_yaml_frontmatter = False
             config.include_measure_yaml_frontmatter = False

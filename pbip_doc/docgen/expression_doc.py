@@ -8,7 +8,7 @@ Vanilla Python implementation.
 import re
 from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
-from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path
+from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..m_table_parser import parse_m_inline_table
 
 
@@ -17,10 +17,19 @@ class ExpressionDocBuilder:
     Builds modular markdown documentation for a single Power Query expression / shared staging query.
     """
 
-    def __init__(self, expr_data: Dict[str, Any], full_model: Dict[str, Any], config: Optional[DocGenConfig] = None):
+    def __init__(
+        self,
+        expr_data: Dict[str, Any],
+        full_model: Dict[str, Any],
+        config: Optional[DocGenConfig] = None,
+        project_name: Optional[str] = None,
+    ):
         self.expr = expr_data
         self.model = full_model
         self.config = config or DocGenConfig()
+        self.project_name = clean_project_name(
+            project_name or self.config.project_name or full_model.get("project_name") or full_model.get("model_name")
+        )
         self.name = expr_data.get("query_name", "UnnamedExpression")
         self.is_staging = expr_data.get("is_staging", True)
         self.full_m = expr_data.get("full_m_expression", "")
@@ -103,6 +112,8 @@ class ExpressionDocBuilder:
     def _build_frontmatter(self) -> str:
         """Constructs YAML frontmatter for RAG vector indexing."""
         tags = ["power_query", "expression", "etl", self.expression_type.lower(), sanitize_filename(self.name)]
+        if self.project_name:
+            tags.append(sanitize_filename(self.project_name))
         if self.is_inline_table:
             tags.extend(["inline_table", "table_literal", "static_lookup"])
         elif self.expression_type == "PARAMETER":
@@ -119,6 +130,7 @@ class ExpressionDocBuilder:
 
         frontmatter_data = {
             "title": f"Expression: {self.name}",
+            "pbip_project": self.project_name,
             "entity_name": self.name,
             "doc_type": "power_query_expression",
             "expression_type": self.expression_type,
