@@ -253,6 +253,42 @@ def _calculate_spatial_position(pos: Dict[str, Any], page_width: float, page_hei
     return SpatialPosition(center_x=center_x, center_y=center_y, zone=zone, bounding_box=bbox)
 
 
+def _resolve_canvas_position(
+    container_id: str,
+    containers_meta: Dict[str, Dict[str, Any]],
+) -> Tuple[float, float, bool]:
+    """
+    Recursively resolves the absolute (x, y) coordinates on the root canvas
+    by traversing up the parentGroupName hierarchy until reaching the container
+    directly contained in the canvas.
+    Also propagates visibility: if any ancestor container is hidden,
+    the visual inherits is_hidden=True.
+    """
+    if container_id not in containers_meta:
+        return 0.0, 0.0, False
+
+    info = containers_meta[container_id]
+    abs_x = float(info.get("x", 0.0))
+    abs_y = float(info.get("y", 0.0))
+    inherited_hidden = bool(info.get("is_hidden", False))
+
+    curr_parent = info.get("parent_group_name")
+    visited = {container_id}
+
+    while curr_parent and curr_parent in containers_meta:
+        if curr_parent in visited:
+            break
+        visited.add(curr_parent)
+        parent_info = containers_meta[curr_parent]
+        abs_x += float(parent_info.get("x", 0.0))
+        abs_y += float(parent_info.get("y", 0.0))
+        if parent_info.get("is_hidden", False):
+            inherited_hidden = True
+        curr_parent = parent_info.get("parent_group_name")
+
+    return abs_x, abs_y, inherited_hidden
+
+
 class ReportParser:
     """
     Parses Power BI Report projects (*.Report) into normalized PBIPReportModel.
@@ -485,6 +521,10 @@ class ReportParser:
         if not visuals_dir.exists():
             return visuals
 
+        # Pass 1: Collect metadata for all containers on the page
+        containers_meta: Dict[str, Dict[str, Any]] = {}
+        containers_raw: List[Dict[str, Any]] = []
+
         for vdir in sorted(visuals_dir.iterdir(), key=lambda d: d.name):
             if not vdir.is_dir():
                 continue
@@ -498,16 +538,57 @@ class ReportParser:
             except Exception:
                 continue
 
-
             v_id = vjson.get("name", vdir.name)
             v_info = vjson.get("visual", {})
+            pos_dict = vjson.get("position", {})
+            parent_group = vjson.get("parentGroupName")
+            is_group = bool("visualGroup" in vjson or (not v_info and "singleVisual" not in vjson))
+            is_hidden = bool(
+                vjson.get("isHidden", False)
+                or v_info.get("isHidden", False)
+                or vjson.get("visualGroup", {}).get("isHidden", False)
+            )
+
+            meta = {
+                "id": v_id,
+                "x": float(pos_dict.get("x", 0.0)),
+                "y": float(pos_dict.get("y", 0.0)),
+                "width": float(pos_dict.get("width", 0.0)),
+                "height": float(pos_dict.get("height", 0.0)),
+                "z": int(pos_dict.get("z", 0)),
+                "parent_group_name": parent_group,
+                "is_hidden": is_hidden,
+                "is_group": is_group,
+                "vjson": vjson,
+                "v_info": v_info,
+            }
+            containers_meta[v_id] = meta
+            containers_raw.append(meta)
+
+        # Pass 2: Process leaf visual elements (skip pure visual groups)
+        for meta in containers_raw:
+            if meta["is_group"]:
+                continue
+
+            v_id = meta["id"]
+            vjson = meta["vjson"]
+            v_info = meta["v_info"]
             visual_type = v_info.get("visualType", "unknown")
             is_slicer = visual_type.lower() in SLICER_VISUAL_TYPES
-            is_hidden = vjson.get("isHidden", False) or v_info.get("isHidden", False)
 
-            # Spatial positioning
-            pos_dict = vjson.get("position", {})
-            spatial_pos = _calculate_spatial_position(pos_dict, page_width, page_height)
+            # Resolve absolute canvas position recursively from root parent
+            abs_x, abs_y, inherited_hidden = _resolve_canvas_position(v_id, containers_meta)
+            effective_is_hidden = meta["is_hidden"] or inherited_hidden
+
+            # Spatial positioning relative to root canvas
+            resolved_pos = {
+                "x": abs_x,
+                "y": abs_y,
+                "width": meta["width"],
+                "height": meta["height"],
+                "z": meta["z"],
+            }
+            spatial_pos = _calculate_spatial_position(resolved_pos, page_width, page_height)
 
             # Query projections & active filters
             qs = v_info.get("query", {}).get("queryState", {})
@@ -591,10 +672,11 @@ class ReportParser:
                     visual_id=v_id,
                     title=title,
                     visual_type=visual_type,
-                    is_hidden=is_hidden,
+                    is_hidden=effective_is_hidden,
                     is_slicer=is_slicer,
                     spatial_position=spatial_pos,
                     calculation_context=calc_context,
+                    parent_group_name=meta.get("parent_group_name"),
                 )
             )
 
@@ -705,23 +787,66 @@ class ReportParser:
     ) -> List[VisualDefinition]:
         visuals: List[VisualDefinition] = []
 
-        for vc in vcs:
+        # Pass 1: Collect metadata for all containers on the page
+        containers_meta: Dict[str, Dict[str, Any]] = {}
+        containers_raw: List[Dict[str, Any]] = []
+
+        for idx, vc in enumerate(vcs):
             cfg = self._parse_json_field(vc.get("config"))
             sv = cfg.get("singleVisual", {})
-            v_id = cfg.get("name", str(vc.get("z", "vc")))
+            svg = cfg.get("singleVisualGroup", {})
+            v_id = cfg.get("name", str(vc.get("z", f"vc_{idx}")))
+            parent_group = cfg.get("parentGroupName") or vc.get("parentGroupName")
+            is_group = bool("singleVisualGroup" in cfg or (not sv and "visual" not in cfg))
+            is_hidden = bool(
+                vc.get("isHidden", False)
+                or cfg.get("isHidden", False)
+                or svg.get("isHidden", False)
+                or sv.get("isHidden", False)
+            )
+
+            meta = {
+                "id": v_id,
+                "x": float(vc.get("x", 0.0)),
+                "y": float(vc.get("y", 0.0)),
+                "width": float(vc.get("width", 0.0)),
+                "height": float(vc.get("height", 0.0)),
+                "z": int(vc.get("z", 0)),
+                "parent_group_name": parent_group,
+                "is_hidden": is_hidden,
+                "is_group": is_group,
+                "vc": vc,
+                "cfg": cfg,
+                "sv": sv,
+            }
+            containers_meta[v_id] = meta
+            containers_raw.append(meta)
+
+        # Pass 2: Process leaf visual elements (skip pure visual groups)
+        for meta in containers_raw:
+            if meta["is_group"]:
+                continue
+
+            v_id = meta["id"]
+            vc = meta["vc"]
+            cfg = meta["cfg"]
+            sv = meta["sv"]
             visual_type = sv.get("visualType", "unknown")
             is_slicer = visual_type.lower() in SLICER_VISUAL_TYPES
-            is_hidden = bool(vc.get("isHidden", False))
 
-            # Position
-            pos = {
-                "x": vc.get("x", 0),
-                "y": vc.get("y", 0),
-                "width": vc.get("width", 0),
-                "height": vc.get("height", 0),
-                "z": vc.get("z", 0),
+            # Resolve absolute canvas position recursively from root parent
+            abs_x, abs_y, inherited_hidden = _resolve_canvas_position(v_id, containers_meta)
+            effective_is_hidden = meta["is_hidden"] or inherited_hidden
+
+            # Spatial positioning relative to root canvas
+            resolved_pos = {
+                "x": abs_x,
+                "y": abs_y,
+                "width": meta["width"],
+                "height": meta["height"],
+                "z": meta["z"],
             }
-            spatial_pos = _calculate_spatial_position(pos, page_width, page_height)
+            spatial_pos = _calculate_spatial_position(resolved_pos, page_width, page_height)
 
             # Query & projections
             alias_map = self._build_alias_map(sv.get("prototypeQuery", {}).get("From", []))
@@ -828,10 +953,11 @@ class ReportParser:
                     visual_id=v_id,
                     title=title,
                     visual_type=visual_type,
-                    is_hidden=is_hidden,
+                    is_hidden=effective_is_hidden,
                     is_slicer=is_slicer,
                     spatial_position=spatial_pos,
                     calculation_context=calc_context,
+                    parent_group_name=meta.get("parent_group_name"),
                 )
             )
 

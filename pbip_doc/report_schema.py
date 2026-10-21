@@ -91,6 +91,7 @@ class VisualDefinition:
     is_slicer: bool = False
     spatial_position: Optional[SpatialPosition] = None
     calculation_context: CalculationContext = field(default_factory=CalculationContext)
+    parent_group_name: Optional[str] = None
 
     @property
     def is_dynamic(self) -> bool:

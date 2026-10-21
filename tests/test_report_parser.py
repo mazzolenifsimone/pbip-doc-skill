@@ -30,6 +30,7 @@ from pbip_doc.report_schema import (
 from pbip_doc.report_parser import (
     ReportParser,
     _calculate_spatial_position,
+    _resolve_canvas_position,
     _parse_where_condition,
     _extract_field_details,
 )
@@ -513,6 +514,230 @@ class TestReportParser(unittest.TestCase):
             self.assertEqual(model_leg.format, "LEGACY")
             self.assertGreater(model_leg.summary.total_visuals, 0)
             self.assertGreater(len(model_leg.pages), 0)
+
+    def test_resolve_canvas_position_direct_and_nested(self):
+        """Tests _resolve_canvas_position across standalone, 1-level, multi-level, and cyclic hierarchies."""
+        # 1. Visual directly on canvas
+        containers = {
+            "v_root": {"id": "v_root", "x": 120.0, "y": 80.0, "parent_group_name": None, "is_hidden": False},
+        }
+        rx, ry, is_h = _resolve_canvas_position("v_root", containers)
+        self.assertEqual((rx, ry, is_h), (120.0, 80.0, False))
+
+        # 2. 1-level parent group
+        containers["g1"] = {"id": "g1", "x": 200.0, "y": 150.0, "parent_group_name": None, "is_hidden": True}
+        containers["v_child1"] = {"id": "v_child1", "x": 30.0, "y": 40.0, "parent_group_name": "g1", "is_hidden": False}
+        rx, ry, is_h = _resolve_canvas_position("v_child1", containers)
+        self.assertEqual(rx, 230.0)
+        self.assertEqual(ry, 190.0)
+        self.assertTrue(is_h)  # Inherited from g1
+
+        # 3. 2-level nested groups (v_leaf -> g2 -> g1 -> canvas)
+        containers["g2"] = {"id": "g2", "x": 50.0, "y": 60.0, "parent_group_name": "g1", "is_hidden": False}
+        containers["v_leaf"] = {"id": "v_leaf", "x": 10.0, "y": 20.0, "parent_group_name": "g2", "is_hidden": False}
+        rx, ry, is_h = _resolve_canvas_position("v_leaf", containers)
+        self.assertEqual(rx, 260.0)  # 10 + 50 + 200
+        self.assertEqual(ry, 230.0)  # 20 + 60 + 150
+        self.assertTrue(is_h)  # Inherited from g1
+
+        # 4. Cycle safe (g_a -> g_b -> g_a)
+        containers["g_a"] = {"id": "g_a", "x": 10.0, "y": 10.0, "parent_group_name": "g_b", "is_hidden": False}
+        containers["g_b"] = {"id": "g_b", "x": 20.0, "y": 20.0, "parent_group_name": "g_a", "is_hidden": False}
+        rx, ry, is_h = _resolve_canvas_position("g_a", containers)
+        self.assertEqual((rx, ry, is_h), (30.0, 30.0, False))
+
+        # 5. Missing parent terminates cleanly
+        containers["v_orphan"] = {"id": "v_orphan", "x": 75.0, "y": 45.0, "parent_group_name": "non_existent", "is_hidden": False}
+        rx, ry, is_h = _resolve_canvas_position("v_orphan", containers)
+        self.assertEqual((rx, ry, is_h), (75.0, 45.0, False))
+
+    def test_pbir_nested_visual_groups_resolution(self):
+        """Validates that PBIR visual containers nested inside groups correctly resolve canvas coordinates and visibility."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_dir = Path(tmpdir) / "TestPBIR.Report"
+            page_dir = report_dir / "definition" / "pages" / "Page1"
+            visuals_dir = page_dir / "visuals"
+            visuals_dir.mkdir(parents=True)
+
+            # Page json
+            with open(page_dir / "page.json", "w", encoding="utf-8") as f:
+                json.dump({"name": "Page1", "displayName": "Nested PBIR Test", "width": 1920, "height": 1080}, f)
+
+            # Group 1 (Canvas root, hidden)
+            g1_dir = visuals_dir / "g1"
+            g1_dir.mkdir()
+            with open(g1_dir / "visual.json", "w", encoding="utf-8") as f:
+                json.dump({
+                    "name": "g1",
+                    "position": {"x": 100, "y": 200, "width": 800, "height": 600, "z": 100},
+                    "visualGroup": {"displayName": "Root Group", "isHidden": True},
+                }, f)
+
+            # Group 2 (Nested in g1, visible)
+            g2_dir = visuals_dir / "g2"
+            g2_dir.mkdir()
+            with open(g2_dir / "visual.json", "w", encoding="utf-8") as f:
+                json.dump({
+                    "name": "g2",
+                    "position": {"x": 50, "y": 60, "width": 500, "height": 400, "z": 200},
+                    "parentGroupName": "g1",
+                    "visualGroup": {"displayName": "Sub Group", "isHidden": False},
+                }, f)
+
+            # Child visual (Nested in g2, visible locally)
+            v1_dir = visuals_dir / "v1"
+            v1_dir.mkdir()
+            with open(v1_dir / "visual.json", "w", encoding="utf-8") as f:
+                json.dump({
+                    "name": "v1",
+                    "position": {"x": 20, "y": 30, "width": 400, "height": 300, "z": 300},
+                    "parentGroupName": "g2",
+                    "isHidden": False,
+                    "visual": {
+                        "visualType": "barChart",
+                        "query": {
+                            "queryState": {
+                                "Y": {
+                                    "projections": [
+                                        {
+                                            "field": {
+                                                "Measure": {
+                                                    "Expression": {"SourceRef": {"Entity": "Sales"}},
+                                                    "Property": "Amount",
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                    },
+                }, f)
+
+            parser = ReportParser()
+            model = parser.parse(str(report_dir))
+            page = model.pages[0]
+
+            # Groups g1 and g2 must NOT be included as chart visuals
+            self.assertEqual(len(page.visuals), 1)
+
+            v1 = page.visuals[0]
+            self.assertEqual(v1.visual_id, "v1")
+            self.assertEqual(v1.parent_group_name, "g2")
+            # Inherited visibility from g1: True
+            self.assertTrue(v1.is_hidden)
+
+            # Coordinates: visual(20, 30) + g2(50, 60) + g1(100, 200) = (170, 290)
+            self.assertIsNotNone(v1.spatial_position)
+            bbox = v1.spatial_position.bounding_box
+            self.assertEqual(bbox.x, 170.0)
+            self.assertEqual(bbox.y, 290.0)
+            self.assertEqual(bbox.width, 400.0)
+            self.assertEqual(bbox.height, 300.0)
+            # Center: 170 + 200 = 370.0, 290 + 150 = 440.0
+            self.assertEqual(v1.spatial_position.center_x, 370.0)
+            self.assertEqual(v1.spatial_position.center_y, 440.0)
+
+    def test_legacy_nested_visual_groups_resolution(self):
+        """Validates that Legacy visualContainers nested inside singleVisualGroup correctly resolve coordinates and visibility."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_dir = Path(tmpdir) / "TestLegacy.Report"
+            report_dir.mkdir(parents=True)
+
+            legacy_report_json = {
+                "sections": [
+                    {
+                        "name": "Sec1",
+                        "displayName": "Nested Legacy Test",
+                        "width": 1920,
+                        "height": 1080,
+                        "visualContainers": [
+                            # Group 1 (Canvas root, visible)
+                            {
+                                "x": 200,
+                                "y": 100,
+                                "width": 900,
+                                "height": 700,
+                                "z": 100,
+                                "config": json.dumps({
+                                    "name": "grp_root",
+                                    "singleVisualGroup": {"displayName": "Root Group", "isHidden": False},
+                                }),
+                            },
+                            # Group 2 (Nested in grp_root, hidden)
+                            {
+                                "x": 50,
+                                "y": 50,
+                                "width": 600,
+                                "height": 500,
+                                "z": 200,
+                                "config": json.dumps({
+                                    "name": "grp_sub",
+                                    "parentGroupName": "grp_root",
+                                    "singleVisualGroup": {"displayName": "Sub Group", "isHidden": True},
+                                }),
+                            },
+                            # Child visual (Nested in grp_sub, visible locally)
+                            {
+                                "x": 10,
+                                "y": 20,
+                                "width": 300,
+                                "height": 200,
+                                "z": 300,
+                                "config": json.dumps({
+                                    "name": "v_chart",
+                                    "parentGroupName": "grp_sub",
+                                    "singleVisual": {
+                                        "visualType": "pieChart",
+                                        "projections": {
+                                            "Y": [{"queryRef": "Sales.Total"}],
+                                        },
+                                        "prototypeQuery": {
+                                            "From": [{"Name": "s", "Entity": "Sales", "Type": 0}],
+                                            "Select": [
+                                                {
+                                                    "Measure": {
+                                                        "Expression": {"SourceRef": {"Source": "s"}},
+                                                        "Property": "Total",
+                                                    },
+                                                    "Name": "Sales.Total",
+                                                }
+                                            ],
+                                        },
+                                    },
+                                }),
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            with open(report_dir / "report.json", "w", encoding="utf-8") as f:
+                json.dump(legacy_report_json, f)
+
+            parser = ReportParser()
+            model = parser.parse(str(report_dir))
+            page = model.pages[0]
+
+            # Groups must NOT be emitted as visuals
+            self.assertEqual(len(page.visuals), 1)
+
+            v = page.visuals[0]
+            self.assertEqual(v.visual_id, "v_chart")
+            self.assertEqual(v.parent_group_name, "grp_sub")
+            # Inherited visibility from grp_sub: True
+            self.assertTrue(v.is_hidden)
+
+            # Coordinates: visual(10, 20) + grp_sub(50, 50) + grp_root(200, 100) = (260, 170)
+            self.assertIsNotNone(v.spatial_position)
+            bbox = v.spatial_position.bounding_box
+            self.assertEqual(bbox.x, 260.0)
+            self.assertEqual(bbox.y, 170.0)
+            self.assertEqual(bbox.width, 300.0)
+            self.assertEqual(bbox.height, 200.0)
+            # Center: 260 + 150 = 410.0, 170 + 100 = 270.0
+            self.assertEqual(v.spatial_position.center_x, 410.0)
+            self.assertEqual(v.spatial_position.center_y, 270.0)
 
 
 class TestReportVisualDocgen(unittest.TestCase):

@@ -273,7 +273,7 @@ class PageVisualDocBuilder:
                 svg_url = self.config.resolve_visual_svg_url(self.page.display_name, v.visual_id)
                 img_tag = (
                     f'<div style="min-width: 260px; max-width: 380px;">'
-                    f'<img src="{svg_url}" width="100%" alt="{title}" style="display: block; border: 1px solid #334155;" />'
+                    f'<img src="{svg_url}" width="300px" alt="{title}" style="display: block; border: 1px solid #334155;" />'
                     f'</div>'
                 )
                 details_cell = self._build_visual_details(v, indicative_pos, is_table_cell=True)
