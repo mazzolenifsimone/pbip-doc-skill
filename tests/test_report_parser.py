@@ -1071,11 +1071,12 @@ class TestReportVisualDocgen(unittest.TestCase):
         self.assertIn("pbip_project: AdventureWorks", docs["tables/Sales.md"])
         self.assertIn("pbip_project: AdventureWorks", docs["measures/Sales/Cost.md"])
 
-        # Check visual markdown contains side-by-side table, img tag, indicative position, filter perimeter
+        # Check visual markdown contains pure markdown image, indicative position, filter perimeter
         overview_md = docs["visuals/Overview.md"]
         self.assertIn("pbip_project: AdventureWorks", overview_md)
-        self.assertIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} | {VisualDocLabels.COL_SPECS_METRICS_PERIMETER} |", overview_md)
-        self.assertIn('<img src="assets/Overview/v1.svg"', overview_md)
+        self.assertIn("![Cost - Canvas Location](assets/Overview/v1.svg)", overview_md)
+        self.assertNotIn("<img", overview_md)
+        self.assertNotIn("<div", overview_md)
         self.assertIn("**Indicative Position**:", overview_md)
         self.assertIn("**Applicable Filter Perimeter**:", overview_md)
 
@@ -1109,13 +1110,15 @@ class TestReportVisualDocgen(unittest.TestCase):
         v_vis.is_hidden = False
         svg_vis = builder.generate_visual_svg(v_vis)
 
-        # Dark gray borders (#334155), dashed grid lines (#64748b)
-        self.assertIn('stroke="#334155"', svg_vis)
-        self.assertIn('stroke="#64748b"', svg_vis)
-        # Visual fill with 80% transparency (20% opacity)
-        self.assertIn('fill-opacity="0.20"', svg_vis)
-        # Center marker: Black X (#000000)
-        self.assertIn('stroke="#000000"', svg_vis)
+        # Compact responsive width 360px
+        self.assertIn('width="360"', svg_vis)
+        # Semi-transparent neutral borders and grid lines
+        self.assertIn('stroke="rgba(128, 128, 128, 0.35)"', svg_vis)
+        self.assertIn('stroke="rgba(128, 128, 128, 0.22)"', svg_vis)
+        # Visual fill with semi-transparent accent highlight
+        self.assertIn('fill="rgba(59, 130, 246, 0.22)"', svg_vis)
+        # Center marker: Accent X
+        self.assertIn('stroke="rgba(59, 130, 246, 0.95)"', svg_vis)
         self.assertIn('stroke-linecap="square"', svg_vis)
         # Solid border for visible visual
         self.assertNotIn('stroke-dasharray="16,10"', svg_vis)
@@ -1140,13 +1143,16 @@ class TestReportVisualDocgen(unittest.TestCase):
         report = self._create_mock_report_model()
         page = report.pages[0]
 
-        # 1. Mode with SVG Maps (2-column side-by-side table)
+        # 1. Mode with SVG Maps (Pure Markdown with image)
         cfg_table = DocGenConfig(include_visual_svg_maps=True)
         builder_table = PageVisualDocBuilder(page=page, report_model=report, config=cfg_table)
         md_table = builder_table.build_markdown()
 
-        # Check table headers and column labels from VisualDocLabels
-        self.assertIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} | {VisualDocLabels.COL_SPECS_METRICS_PERIMETER} |", md_table)
+        # Check pure markdown image syntax and absence of raw HTML
+        self.assertIn("![Shape with Metric - Canvas Location](assets/Executive_Overview/v2_shape_dynamic.svg)", md_table)
+        self.assertNotIn("<img", md_table)
+        self.assertNotIn("<div", md_table)
+        self.assertNotIn("<br", md_table)
         self.assertIn(f"**{VisualDocLabels.LABEL_VISUAL_TYPE}**:", md_table)
         self.assertIn(f"**{VisualDocLabels.LABEL_INDICATIVE_POSITION}**:", md_table)
         self.assertIn(f"**{VisualDocLabels.LABEL_EVALUATED_METRICS}**:", md_table)
@@ -1164,9 +1170,11 @@ class TestReportVisualDocgen(unittest.TestCase):
         builder_text = PageVisualDocBuilder(page=page, report_model=report, config=cfg_text)
         md_text = builder_text.build_markdown()
 
-        # Check bullet list structure
-        self.assertNotIn(f"| {VisualDocLabels.COL_CANVAS_LOCATION} |", md_text)
-        self.assertNotIn("<img src=", md_text)
+        # Check bullet list structure without image
+        self.assertNotIn("![Shape with Metric - Canvas Location]", md_text)
+        self.assertNotIn("<img", md_text)
+        self.assertNotIn("<div", md_text)
+        self.assertNotIn("<br", md_text)
         self.assertIn(f"- **{VisualDocLabels.LABEL_VISUAL_TYPE}**:", md_text)
         self.assertIn(f"- **{VisualDocLabels.LABEL_INDICATIVE_POSITION}**:", md_text)
         self.assertIn(f"- **{VisualDocLabels.LABEL_EVALUATED_METRICS}**:", md_text)

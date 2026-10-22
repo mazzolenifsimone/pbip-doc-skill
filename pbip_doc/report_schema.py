@@ -32,6 +32,7 @@ class EvaluatedMetric:
     role: str        # "Y", "Values", "Data", "Size"
     model_key: str   # "Table[Field]"
     aggregation: Optional[str] = None  # "Sum", "Count", "Average", "Min", "Max", etc.
+    display_name: Optional[str] = None  # Visual on-screen alias or column header name
 
 
 @dataclass
@@ -40,6 +41,7 @@ class SlicingCoordinate:
     table: str
     field: str
     model_key: str   # "Table[Field]"
+    display_name: Optional[str] = None  # Visual on-screen alias or column header name
 
 
 @dataclass
@@ -89,6 +91,7 @@ class VisualDefinition:
     visual_type: str
     is_hidden: bool = False
     is_slicer: bool = False
+    is_conditional_title: bool = False
     spatial_position: Optional[SpatialPosition] = None
     calculation_context: CalculationContext = field(default_factory=CalculationContext)
     parent_group_name: Optional[str] = None
@@ -100,6 +103,8 @@ class VisualDefinition:
         vs static (purely decorative line, shape, or static image).
         """
         if self.is_slicer:
+            return True
+        if self.is_conditional_title:
             return True
         if self.calculation_context.evaluated_metrics:
             return True

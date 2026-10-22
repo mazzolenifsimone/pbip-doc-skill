@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..dax_formatter import format_dax
+from ..m_formatter import format_m
 
 
 class TableDocBuilder:
@@ -78,8 +79,9 @@ class TableDocBuilder:
     def _build_frontmatter(self) -> str:
         """Constructs YAML frontmatter for RAG indexing and cataloging."""
         root_sources = [
-            s.get("connection_string", s.get("source_type"))
+            str(s.get("connection_string", s.get("source_type", ""))).replace("\\", "/")
             for s in self.table.get("root_data_sources", [])
+            if s.get("connection_string") or s.get("source_type")
         ]
         
         inc_policy = self.table.get("incremental_refresh_policy")
@@ -376,7 +378,7 @@ class TableDocBuilder:
             lines.append("### Physical Data Sources of Origin:")
             for s in root_sources:
                 stype = s.get("source_type", "GENERIC")
-                conn = s.get("connection_string", "N/A")
+                conn = str(s.get("connection_string", "N/A")).replace("\\", "/")
                 server = s.get("server")
                 db = s.get("database")
                 desc = f"- **`[{stype}]`** `{conn}`"
@@ -414,10 +416,12 @@ class TableDocBuilder:
 
         # Full M Code snippet
         if self.config.include_table_m_code and lineage_node and lineage_node.get("full_m_expression"):
+            raw_m = lineage_node["full_m_expression"]
+            formatted_m = format_m(raw_m)
             lines.append("")
             lines.append("### Full Power Query M Expression:")
             lines.append("```powerquery")
-            lines.append(lineage_node["full_m_expression"].strip())
+            lines.append(formatted_m)
             lines.append("```")
 
         return "\n".join(lines)

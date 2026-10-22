@@ -58,8 +58,15 @@ python -m pbip_doc.cli inspect path/to/definition --set include_inherited_entiti
 # 2. Extract complete metadata JSON (with inline config override)
 python generate_json.py path/to/definition -o semantic_model_docs.json --set exclude_auto_date_tables=false
 
-# 3. Generate modular Markdown documentation
-python generate_docs.py path/to/definition -o docs/ --set include_table_m_code=false
+# 3. Generate modular documentation (Markdown, Native HTML, or Both)
+# Pure Markdown (AI-RAG optimized, 100% standard markdown, zero HTML)
+python generate_docs.py path/to/definition -o docs/ --format markdown
+
+# Native HTML Wiki Portal (Human exploration optimized, self-contained, offline search)
+python generate_docs.py path/to/definition -o docs/ --format html --theme auto --html-title "Enterprise BI Portal"
+
+# Dual Publication (Simultaneously generates docs/markdown/ and docs/html/)
+python generate_docs.py path/to/definition -o docs/ --format both
 
 # 4. Generate documentation with web portal or absolute URLs
 python generate_docs.py path/to/definition -o docs/ \
@@ -111,17 +118,26 @@ When asked about a specific calculation, table, or refactoring:
   - Check `snowflake_paths`: reveals normalization chains (e.g., `FactSales -> DimCustomer -> DimGeography -> DimCountry`).
   - Check `root_data_sources`: provides physical data store endpoints.
 
-### Step 4: Documentation Generation & RAG Ingestion
+### Step 4: Documentation Generation (Markdown & Native HTML)
 
-When the user asks to document the semantic model or prepare files for search/RAG:
+When the user asks to document the semantic model or prepare files for search/RAG or human knowledge bases:
 - Call `generate_markdown_docs(path=..., output_dir="docs")` or run `python generate_docs.py`.
-- The engine produces:
+- **Pure Markdown Output (`--format markdown`)**:
   - `docs/INDEX.md`: Global model index and table/measure inventories.
   - `docs/tables/<TableName>.md`: Star schema role, join paths, column schemas, and measures.
-  - `docs/measures/<MeasureName>.md`: DAX code, upstream/downstream DAG, referenced columns.
+  - `docs/measures/<Table>/<MeasureName>.md`: DAX code, upstream/downstream DAG, referenced columns.
+  - `docs/visuals/<PageName>.md`: Report canvas layout, spatial coordinates, evaluated metrics, and SVG mini-maps.
   - `docs/functions/<FunctionName>.md`: User-defined DAX functions (if present).
   - `docs/expressions/<ExpressionName>.md`: Shared Power Query M queries and parameters.
-- Every generated document includes structured YAML frontmatter, making it ready for vector chunking or LLM search.
+  - 100% pure standard Markdown, free of raw HTML tags, with structured YAML frontmatter ready for vector chunking or LLM search.
+- **Native HTML Wiki Portal (`--format html`)**:
+  - `docs/index.html`: Interactive corporate wiki dashboard with KPI cards and table/measure inventories.
+  - `docs/tables/<TableName>.html`: Tabbed table interface (Data Dictionary, Relationships, Measures, Power Query Lineage).
+  - `docs/measures/<Table>/<MeasureName>.html`: Interactive DAX viewer with 1-click copy buttons and dependency graphs.
+  - `docs/visuals/<PageName>.html`: Responsive visual container cards with spatial coordinates and scaled SVG mini-maps.
+  - `docs/assets/`: Self-contained CSS design system, Vanilla JS app, and client-side offline search index (`search_index.js`).
+  - 100% offline and `file://` protocol safe, zero CDN dependencies.
+- **Dual Publication (`--format both`)**: Simultaneously outputs to `<output_dir>/markdown/` and `<output_dir>/html/`.
 
 ---
 

@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 from .config import DocGenConfig
 from .utils import format_yaml_frontmatter, sanitize_filename, join_doc_path, clean_project_name
 from ..m_table_parser import parse_m_inline_table
+from ..m_formatter import format_m
 
 
 class ExpressionDocBuilder:
@@ -124,8 +125,9 @@ class ExpressionDocBuilder:
             tags.extend(["staging_query", "data_transformation"])
 
         root_source_strings = [
-            s.get("connection_string", s.get("source_type"))
+            str(s.get("connection_string", s.get("source_type", ""))).replace("\\", "/")
             for s in self.root_sources
+            if s.get("connection_string") or s.get("source_type")
         ]
 
         frontmatter_data = {
@@ -230,7 +232,7 @@ class ExpressionDocBuilder:
             lines.append("### Physical Data Sources of Origin:")
             for s in self.root_sources:
                 stype = s.get("source_type", "GENERIC")
-                conn = s.get("connection_string", "N/A")
+                conn = str(s.get("connection_string", "N/A")).replace("\\", "/")
                 server = s.get("server")
                 db = s.get("database")
                 desc = f"- **`[{stype}]`** `{conn}`"
@@ -318,11 +320,12 @@ class ExpressionDocBuilder:
 
     def _build_m_code_chapter(self) -> str:
         """Full M Expression."""
+        formatted_m = format_m(self.full_m) if self.full_m else ""
         lines = [
             "## Full Power Query M Expression",
             "",
             "```powerquery",
-            self.full_m.strip(),
+            formatted_m,
             "```",
         ]
         return "\n".join(lines)

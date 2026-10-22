@@ -20,6 +20,7 @@ from .star_schema import StarSchemaResolver
 from .measure_analyzer import MeasureDependencyResolver
 from .docgen import DocGenConfig, MarkdownDocGenerator
 from .dax_formatter import format_dax, strip_dax_comments
+from .m_formatter import format_m, strip_m_comments
 
 __version__ = "0.2.0"
 __all__ = [
@@ -40,4 +41,6 @@ __all__ = [
     "MarkdownDocGenerator",
     "format_dax",
     "strip_dax_comments",
+    "format_m",
+    "strip_m_comments",
 ]

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from .parser import PBIPParser
-from .docgen import DocGenConfig, MarkdownDocGenerator
+from .docgen import DocGenConfig, MarkdownDocGenerator, HtmlDocGenerator
 
 
 def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
@@ -65,6 +65,15 @@ def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
 
     if getattr(args, "report_dataset_name", None):
         config.report_dataset_name = args.report_dataset_name
+
+    if getattr(args, "format", None):
+        config.output_format = args.format
+
+    if getattr(args, "theme", None):
+        config.html_theme = args.theme
+
+    if getattr(args, "html_title", None):
+        config.html_title = args.html_title
 
     return config
 
@@ -240,6 +249,23 @@ def main():
         default=None,
         help="Explicit remote/bound semantic model dataset name for report visual table/measure links",
     )
+    docgen_parser.add_argument(
+        "-f", "--format",
+        choices=["markdown", "html", "both"],
+        default=None,
+        help="Documentation output format: 'markdown', 'html', or 'both' (default: markdown or from config)",
+    )
+    docgen_parser.add_argument(
+        "--theme",
+        choices=["auto", "light", "dark"],
+        default=None,
+        help="Theme for HTML documentation portal (default: auto)",
+    )
+    docgen_parser.add_argument(
+        "--html-title",
+        default=None,
+        help="Custom header title for HTML documentation portal",
+    )
 
     # Command: config
     config_parser = subparsers.add_parser("config", help="Inspect, export or initialize configuration JSON files")
@@ -402,27 +428,54 @@ def main():
         if args.no_m_code:
             config.include_table_m_code = False
 
-        generator = MarkdownDocGenerator(config)
+        out_fmt = (config.output_format or "markdown").lower()
         try:
-            generated_docs = generator.write_to_directory(args.path, config.output_dir)
-            table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
-            measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
-            function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
-            visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
-            svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
-            index_doc = next((p for p in generated_docs if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
-            print(f"[SUCCESS] Documentation successfully generated in '{config.output_dir}'!")
-            print(f" -> Index: {config.output_dir}/{index_doc}")
-            print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({config.output_dir}/{config.tables_subdir}/)")
-            print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({config.output_dir}/{config.measures_subdir}/)")
-            if function_docs:
-                print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({config.output_dir}/{config.functions_subdir}/)")
-            if visual_docs:
-                print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({config.output_dir}/{config.visuals_subdir}/)")
-            if svg_docs:
-                print(f" -> Visual Maps: {len(svg_docs)} scaled SVG canvas mini-maps ({config.output_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
-            elif not config.include_visual_docs:
-                print(f" -> Visuals: Disabled (--no-visuals)")
+            if out_fmt in ("markdown", "both"):
+                md_dir = f"{config.output_dir}/markdown" if out_fmt == "both" else config.output_dir
+                md_generator = MarkdownDocGenerator(config)
+                generated_docs = md_generator.write_to_directory(args.path, md_dir)
+                table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
+                measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
+                function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
+                visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
+                svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
+                index_doc = next((p for p in generated_docs if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
+                print(f"[SUCCESS] Markdown documentation successfully generated in '{md_dir}'!")
+                print(f" -> Index: {md_dir}/{index_doc}")
+                print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({md_dir}/{config.tables_subdir}/)")
+                print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({md_dir}/{config.measures_subdir}/)")
+                if function_docs:
+                    print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({md_dir}/{config.functions_subdir}/)")
+                if visual_docs:
+                    print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({md_dir}/{config.visuals_subdir}/)")
+                if svg_docs:
+                    print(f" -> Visual Maps: {len(svg_docs)} scaled SVG canvas mini-maps ({md_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
+                elif not config.include_visual_docs:
+                    print(f" -> Visuals: Disabled (--no-visuals)")
+                print(f" -> Format: Pure Markdown + YAML Frontmatter (AI-RAG optimized)")
+
+            if out_fmt in ("html", "both"):
+                html_dir = f"{config.output_dir}/html" if out_fmt == "both" else config.output_dir
+                html_generator = HtmlDocGenerator(config)
+                generated_html = html_generator.write_to_directory(args.path, html_dir)
+                table_html = [p for p in generated_html if p.startswith(config.tables_subdir) and p.endswith(".html")]
+                measure_html = [p for p in generated_html if p.startswith(config.measures_subdir) and p.endswith(".html")]
+                function_html = [p for p in generated_html if p.startswith(config.functions_subdir) and p.endswith(".html")]
+                visual_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".html")]
+                svg_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
+                print(f"[SUCCESS] Native HTML Wiki Documentation successfully generated in '{html_dir}'!")
+                print(f" -> Portal Entry: {html_dir}/index.html")
+                print(f" -> Tables: {len(table_html)} dedicated HTML pages ({html_dir}/{config.tables_subdir}/)")
+                print(f" -> Measures: {len(measure_html)} dedicated HTML pages ({html_dir}/{config.measures_subdir}/)")
+                if function_html:
+                    print(f" -> Functions: {len(function_html)} dedicated HTML pages ({html_dir}/{config.functions_subdir}/)")
+                if visual_html:
+                    print(f" -> Visuals: {len(visual_html)} dedicated Page HTML files ({html_dir}/{config.visuals_subdir}/)")
+                if svg_html:
+                    print(f" -> Visual Maps: {len(svg_html)} scaled SVG canvas mini-maps ({html_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
+                print(f" -> Assets: CSS stylesheet, Vanilla JS app, and offline search index ({html_dir}/assets/)")
+                print(f" -> Format: Native HTML5 + Responsive Enterprise Wiki Portal (Zero dependencies, file:// safe)")
+
             print(f" -> Auto Date Tables Excluded: {'Yes (default)' if config.exclude_auto_date_tables else 'No (included)'}")
             print(f" -> Inherited Entities Published: {'Yes' if config.include_inherited_entities else 'No (out of scope by default)'}")
             if config.base_doc_url:
@@ -431,7 +484,6 @@ def main():
                 print(f" -> External Docs Base URL: {config.external_docs_base_url}")
             if config.external_doc_paths:
                 print(f" -> External Models Configured: {len(config.external_doc_paths)} ({', '.join(config.external_doc_paths.keys())})")
-            print(f" -> Format: Pure Markdown + YAML Frontmatter (AI-RAG optimized)")
         except Exception as e:
             print(f"[ERROR] Failed to generate documentation: {e}", file=sys.stderr)
             sys.exit(1)

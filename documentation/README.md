@@ -7,9 +7,11 @@ tags: ["documentation", "portal", "index", "json_schema", "markdown_generator", 
 # pbip-doc-skill - Technical Reference Portal
 
 > **TL;DR**:
-> - This portal provides comprehensive technical specifications for the two-phase pbip-doc-skill.
+> - This portal provides comprehensive technical specifications for the pbip-doc-skill.
 > - **Phase 1 (`json_schema/`)**: Documents the dependency resolver and the enriched JSON metadata schema.
-> - **Phase 2 (`markdown_generator/`)**: Documents the modular, RAG-ready Markdown generator, file schemas, and agent conventions.
+> - **Phase 2 (Dual Presentation Engine)**:
+>   - **Pure Markdown Renderer (`markdown_generator/`)**: 100% standard Markdown, zero HTML, YAML frontmatter, AI-RAG & Agent-skill optimized.
+>   - **Native HTML Wiki Portal (`html_engine`)**: 100% human-optimized corporate wiki portal (zero external CDN dependencies, self-contained CSS & JS, client-side offline search, dark/light theme, copy buttons, live filterable tables, and SVG canvas mini-maps).
 > - All documentation is structured for clear human reading and high-precision agent navigation.
 
 ---
@@ -33,13 +35,18 @@ tags: ["documentation", "portal", "index", "json_schema", "markdown_generator", 
 │         Standardized Metadata JSON Specification       │
 │               [documentation/json_schema/]             │
 └───────────────────────────┬────────────────────────────┘
-                            │ Consumed by
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│          PHASE 2: Modular Markdown Generator           │
-│  (<project_name>.md, tables/*.md, measures/*/*.md)     │
-│           [documentation/markdown_generator/]          │
-└────────────────────────────────────────────────────────┘
+                            │ Consumed by Presentation Engine
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│     Pure Markdown Docs    │ │   Native HTML Wiki Portal │
+│  (AI-RAG / LLM Optimized) │ │ (Human Knowledge Base)    │
+│  - 100% standard markdown │ │ - Responsive wiki shell   │
+│  - Zero raw HTML tags     │ │ - Instant client search   │
+│  - YAML frontmatter       │ │ - Dark/light theme toggle │
+│  - Scaled SVG mini-maps   │ │ - Tabbed tables & copy btn│
+│  - Token chunking safe    │ │ - Zero CDN, file:// safe  │
+└───────────────────────────┘ └───────────────────────────┘
 ```
 
 ---

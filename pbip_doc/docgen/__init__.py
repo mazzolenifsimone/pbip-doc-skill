@@ -11,6 +11,7 @@ from .expression_doc import ExpressionDocBuilder
 from .index_doc import IndexDocBuilder
 from .visual_doc import PageVisualDocBuilder, VisualDocLabels
 from .engine import MarkdownDocGenerator
+from .html_engine import HtmlDocGenerator
 
 __all__ = [
     "DocGenConfig",
@@ -22,5 +23,6 @@ __all__ = [
     "PageVisualDocBuilder",
     "VisualDocLabels",
     "MarkdownDocGenerator",
+    "HtmlDocGenerator",
 ]
 

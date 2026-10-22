@@ -79,6 +79,9 @@ class DocGenConfig:
     # General options
     project_name: Optional[str] = None
     output_dir: str = "docs"
+    output_format: str = "markdown"  # "markdown", "html", or "both"
+    html_theme: str = "auto"          # "auto", "light", "dark"
+    html_title: Optional[str] = None
     tables_subdir: str = "tables"
     measures_subdir: str = "measures"
     functions_subdir: str = "functions"
@@ -650,6 +653,9 @@ class DocGenConfig:
             "report_dataset_name": "Explicit remote/bound semantic model dataset name for report visual table/measure links.",
             "project_name": "Explicit PBIP project name override for frontmatter indexing and master catalog naming.",
             "output_dir": "Target directory where documentation files are written.",
+            "output_format": "Documentation format to emit ('markdown', 'html', or 'both').",
+            "html_theme": "Default theme for HTML documentation portal ('auto', 'light', or 'dark').",
+            "html_title": "Optional custom header title for HTML documentation portal.",
             "tables_subdir": "Subdirectory name for table documentation pages.",
             "measures_subdir": "Subdirectory name for measure documentation pages.",
             "functions_subdir": "Subdirectory name for DAX UDF function documentation pages.",

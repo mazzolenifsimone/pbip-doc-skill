@@ -71,11 +71,30 @@ Deconstructs the 3 foundational filter sources:
 - **Canvas Slicers**: Interactive slicer controls placed on the canvas and their default state.
 
 ### 4. Dynamic Visuals Catalog (In-Scope)
-Sorted in natural reading order (Top-to-Bottom, Left-to-Right). When `include_visual_svg_maps` is enabled (default), dynamic visuals are presented in a 2-column side-by-side table layout:
+Sorted in natural reading order (Top-to-Bottom, Left-to-Right). When `include_visual_svg_maps` is enabled (default), dynamic visuals are presented using standard Markdown image embeds followed by structured bullet specifications:
 
-| Canvas Location | Technical Specifications, Metrics & Filter Perimeter |
-| :---: | :--- |
-| `<div style="min-width: 260px; max-width: 380px;"><img src="assets/<Page>/<Visual_Id>.svg" width="100%" /></div>` | **Visual Type**: `barChart` &nbsp; *(Visible - Solid Border)*<br>**Visual ID**: `01af2f16...`<br>**Indicative Position**: `Center-Left`<br><br>**Evaluated DAX Metric(s)**:<br>• [Sales[Revenue]](../measures/Sales/Revenue.md) *(Role: Y)*<br><br>**Slicing Dimension(s) (Axis / Row Context)**:<br>• [Product](../tables/Product.md) ➔ `Category` *(Role: Category)*<br><br>**Applicable Filter Perimeter**:<br>• **Locked Page Filter(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Status](../tables/Status.md) ➔ `Active` In (`Won`) *(Hard constraint)*<br>• **Interactive Page Filter(s) (Panel)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Date](../tables/Date.md) ➔ `Year` (Default: `All (No filter applied)`)<br>• **Canvas Page Slicer(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Calendar](../tables/Calendar.md) ➔ `Date` (Default: `All`)<br>• **Visual-Level Filter(s)**:<br>&nbsp;&nbsp;&nbsp;&nbsp;• [Product](../tables/Product.md) ➔ `Category`: `In (Bikes)` *(Type: Categorical)* |
+```markdown
+### 1. Revenue by Category
+
+![Revenue by Category - Canvas Location](assets/<Page>/<Visual_Id>.svg)
+
+- **Visual Type**: `barChart` *(Visible - Solid Border)*
+- **Visual ID**: `01af2f16...`
+- **Indicative Position**: `Center-Left`
+- **Evaluated DAX Metric(s)**:
+  - [Sales[Revenue]](../measures/Sales/Revenue.md) *(Role: Y)*
+- **Slicing Dimension(s) (Axis / Row Context)**:
+  - [Product](../tables/Product.md) ➔ `Category` *(Role: Category)*
+- **Applicable Filter Perimeter**:
+  - **Locked Page Filter(s)**:
+    - [Status](../tables/Status.md) ➔ `Active` In (`Won`) *(Hard constraint)*
+  - **Interactive Page Filter(s) (Panel)**:
+    - [Date](../tables/Date.md) ➔ `Year` (Default: `All (No filter applied)`)
+  - **Canvas Page Slicer(s)**:
+    - [Calendar](../tables/Calendar.md) ➔ `Date` (Default: `All`)
+  - **Visual-Level Filter(s)**:
+    - [Product](../tables/Product.md) ➔ `Category`: `In (Bikes)` *(Type: Categorical)*
+```
 
 #### Scaled SVG Canvas Mini-Map Specifications:
 - **Canvas Viewport**: Exact aspect ratio (`viewBox="0 0 page_width page_height"`), square corners (`rx="0" ry="0"`), and dark gray canvas border (`#334155`).

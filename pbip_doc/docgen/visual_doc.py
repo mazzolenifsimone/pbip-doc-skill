@@ -295,75 +295,67 @@ class PageVisualDocBuilder:
 
         for idx, v in enumerate(sorted_visuals, start=1):
             title = v.title or f"Visual {idx}"
+            cond_badge = " *(Conditional Title)*" if v.is_conditional_title else ""
             s_pos = v.spatial_position
             zone = s_pos.zone if s_pos else "Canvas"
             indicative_pos = zone.replace("Middle-", "Center-")
             if indicative_pos in ("Center-Center", "Canvas"):
                 indicative_pos = "Center"
 
+            details_list = self._build_visual_details(v, indicative_pos)
+            lines.extend([
+                f"### {idx}. {title}{cond_badge}",
+                "",
+            ])
             if self.config.include_visual_svg_maps:
                 svg_url = self.config.resolve_visual_svg_url(self.page.display_name, v.visual_id)
-                img_tag = (
-                    f'<div style="min-width: 260px; max-width: 380px;">'
-                    f'<img src="{svg_url}" width="300px" alt="{title}" style="display: block; border: 1px solid #334155;" />'
-                    f'</div>'
-                )
-                details_cell = self._build_visual_details(v, indicative_pos, is_table_cell=True)
-
                 lines.extend([
-                    f"### {idx}. {title}",
-                    "",
-                    f"| {lbl.COL_CANVAS_LOCATION} | {lbl.COL_SPECS_METRICS_PERIMETER} |",
-                    "| :---: | :--- |",
-                    f"| {img_tag} | {details_cell} |",
+                    f"![{title} - Canvas Location]({svg_url})",
                     "",
                 ])
-            else:
-                # Text-only fallback when SVG maps are disabled
-                details_list = self._build_visual_details(v, indicative_pos, is_table_cell=False)
-                lines.extend([
-                    f"### {idx}. {title}",
-                    "",
-                    details_list,
-                    "",
-                ])
+            lines.extend([
+                details_list,
+                "",
+            ])
 
         return "\n".join(lines).rstrip()
 
-    def _build_visual_details(self, visual: VisualDefinition, indicative_pos: str, is_table_cell: bool) -> str:
+    def _build_visual_details(self, visual: VisualDefinition, indicative_pos: str) -> str:
         """
-        Formats technical specifications, metrics, slicing dimensions, and filter perimeter.
-        Abstracts between HTML-friendly single-cell table formatting and standard Markdown bullet lists.
+        Formats technical specifications, metrics, slicing dimensions, and filter perimeter
+        using 100% pure standard Markdown bullet lists.
         """
         lbl = VisualDocLabels
         calc = visual.calculation_context
         status_str = lbl.BADGE_HIDDEN if visual.is_hidden else lbl.BADGE_VISIBLE
         slicer_badge = f" {lbl.BADGE_SLICER_CONTROL}" if visual.is_slicer else ""
 
-        sub_bullet = "•" if is_table_cell else "  -"
-        item_bullet = "&nbsp;&nbsp;&nbsp;&nbsp;•" if is_table_cell else "    -"
-        sep = "<br>" if is_table_cell else "\n"
-        prefix = "" if is_table_cell else "- "
+        sub_bullet = "  -"
+        item_bullet = "    -"
+        prefix = "- "
 
         sections: List[str] = []
 
         # 1. Identity & Core Specs
         header_lines = [
-            f"{prefix}**{lbl.LABEL_VISUAL_TYPE}**: `{visual.visual_type}`{slicer_badge} &nbsp; {status_str}",
+            f"{prefix}**{lbl.LABEL_VISUAL_TYPE}**: `{visual.visual_type}`{slicer_badge} {status_str}",
             f"{prefix}**{lbl.LABEL_VISUAL_ID}**: `{visual.visual_id}`",
             f"{prefix}**{lbl.LABEL_INDICATIVE_POSITION}**: `{indicative_pos}`",
         ]
-        sections.append(sep.join(header_lines))
+        sections.append("\n".join(header_lines))
 
         # 2. Evaluated DAX Metrics
         if calc.evaluated_metrics:
             m_lines = [f"{prefix}**{lbl.LABEL_EVALUATED_METRICS}**:"]
             for m in calc.evaluated_metrics:
+                is_implicit = bool(m.aggregation) or m.field_type in ("IMPLICIT_MEASURE", "COLUMN")
                 m_link = self._format_metric_link(m)
                 agg_badge = f" ({lbl.AGGREGATION_PREFIX}: `{m.aggregation}`)" if m.aggregation else ""
+                implicit_badge = " *(Implicit Measure)*" if is_implicit else ""
                 role_badge = f" *({lbl.ROLE_PREFIX}: {m.role})*" if m.role else ""
-                m_lines.append(f"{sub_bullet} {m_link}{agg_badge}{role_badge}")
-            sections.append(sep.join(m_lines))
+                display_badge = f' | Screen Name: "{m.display_name}"' if m.display_name else ""
+                m_lines.append(f"{sub_bullet} {m_link}{agg_badge}{implicit_badge}{role_badge}{display_badge}")
+            sections.append("\n".join(m_lines))
         elif not visual.is_slicer:
             sections.append(f"{prefix}**{lbl.LABEL_EVALUATED_METRICS}**: {lbl.VALUE_NONE_STRUCTURAL}")
 
@@ -372,8 +364,9 @@ class PageVisualDocBuilder:
             s_lines = [f"{prefix}**{lbl.LABEL_SLICING_DIMENSIONS}**:"]
             for c in calc.slicing_coordinates:
                 t_link = self._format_table_link(c.table)
-                s_lines.append(f"{sub_bullet} {t_link} ➔ `{c.field}` *({lbl.ROLE_PREFIX}: {c.role})*")
-            sections.append(sep.join(s_lines))
+                display_badge = f' | Screen Name: "{c.display_name}"' if c.display_name else ""
+                s_lines.append(f"{sub_bullet} {t_link} ➔ `{c.field}` *({lbl.ROLE_PREFIX}: {c.role})*{display_badge}")
+            sections.append("\n".join(s_lines))
 
         # 4. Applicable Filter Perimeter (Each tier with listed bullet points)
         filter_lines = [f"{prefix}**{lbl.LABEL_FILTER_PERIMETER}**:"]
@@ -416,27 +409,20 @@ class PageVisualDocBuilder:
         else:
             filter_lines.append(f"{sub_bullet} **{lbl.LABEL_VISUAL_LEVEL_FILTERS}**: {lbl.VALUE_NONE}")
 
-        sections.append(sep.join(filter_lines))
+        sections.append("\n".join(filter_lines))
 
-        major_sep = "<br><br>" if is_table_cell else "\n\n"
-        return major_sep.join(sections)
+        return "\n\n".join(sections)
 
     def generate_visual_svg(self, visual: VisualDefinition) -> str:
         """
-        Generates scaled SVG mini-map of the page canvas highlighting the visual.
-        - Square dark gray page canvas border (#334155).
-        - Dashed dark gray 3x3 reference grid guidelines (#64748b).
-        - Square visual rectangle with dark gray border (#334155), solid if visible, dashed if hidden.
-        - Visual fill: dark gray (#334155) with 80% transparency (fill-opacity="0.20").
-        - Center marker: crisp black 'X' (#000000).
+        Generates scaled, semi-transparent SVG mini-map of the page canvas highlighting the visual.
+        - Compact default width (360px) preventing Markdown full-page blowout.
+        - Semi-transparent canvas background and grid adapting gracefully to both light and dark themes.
+        - Highlighted visual rectangle with translucent accent fill.
         """
         page_w = float(self.page.width) if self.page.width and self.page.width > 0 else 1920.0
         page_h = float(self.page.height) if self.page.height and self.page.height > 0 else 1080.0
-
-        dark_gray_border = "#334155"
-        dark_gray_grid = "#64748b"
-        visual_fill = "#334155"
-        fill_opacity = "0.20"
+        calc_height = (360.0 * page_h / page_w) if page_w > 0 else 202.5
 
         s_pos = visual.spatial_position
         if s_pos:
@@ -458,24 +444,24 @@ class PageVisualDocBuilder:
         y1 = page_h / 3.0
         y2 = (page_h * 2.0) / 3.0
 
-        d = 14  # Size of the X arms
+        d = 16  # Size of the X arms
 
-        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {page_w} {page_h}" width="100%" height="auto" style="background: #ffffff; display: block;">
-  <!-- Canvas Background & Page Border (Square & Dark Gray) -->
-  <rect x="2" y="2" width="{page_w - 4}" height="{page_h - 4}" fill="#ffffff" stroke="{dark_gray_border}" stroke-width="4"/>
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {page_w} {page_h}" width="360" height="{calc_height:.1f}" style="max-width: 100%; height: auto; display: block; border-radius: 6px;">
+  <!-- Canvas Background & Page Border (Semi-Transparent Neutral) -->
+  <rect x="2" y="2" width="{page_w - 4}" height="{page_h - 4}" fill="rgba(128, 128, 128, 0.05)" stroke="rgba(128, 128, 128, 0.35)" stroke-width="3" rx="4"/>
   
-  <!-- Zone Guidelines (3x3 grid - Dashed Dark Gray) -->
-  <line x1="{x1:.1f}" y1="0" x2="{x1:.1f}" y2="{page_h}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
-  <line x1="{x2:.1f}" y1="0" x2="{x2:.1f}" y2="{page_h}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
-  <line x1="0" y1="{y1:.1f}" x2="{page_w}" y2="{y1:.1f}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
-  <line x1="0" y1="{y2:.1f}" x2="{page_w}" y2="{y2:.1f}" stroke="{dark_gray_grid}" stroke-width="2" stroke-dasharray="8,8"/>
+  <!-- Zone Guidelines (3x3 grid - Dashed Semi-Transparent) -->
+  <line x1="{x1:.1f}" y1="0" x2="{x1:.1f}" y2="{page_h}" stroke="rgba(128, 128, 128, 0.22)" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="{x2:.1f}" y1="0" x2="{x2:.1f}" y2="{page_h}" stroke="rgba(128, 128, 128, 0.22)" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="0" y1="{y1:.1f}" x2="{page_w}" y2="{y1:.1f}" stroke="rgba(128, 128, 128, 0.22)" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="0" y1="{y2:.1f}" x2="{page_w}" y2="{y2:.1f}" stroke="rgba(128, 128, 128, 0.22)" stroke-width="2" stroke-dasharray="8,8"/>
   
-  <!-- Visual Bounding Box (Square & Dark Gray Border, Dark Gray Fill with 80% Transparency) -->
-  <rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{visual_fill}" fill-opacity="{fill_opacity}" stroke="{dark_gray_border}" stroke-width="5" {stroke_style}/>
+  <!-- Visual Bounding Box (Translucent Blue Highlight) -->
+  <rect x="{x}" y="{y}" width="{w}" height="{h}" fill="rgba(59, 130, 246, 0.22)" stroke="rgba(59, 130, 246, 0.85)" stroke-width="5" rx="3" {stroke_style}/>
   
-  <!-- Visual Center Marker: Black X -->
-  <line x1="{cx - d:.1f}" y1="{cy - d:.1f}" x2="{cx + d:.1f}" y2="{cy + d:.1f}" stroke="#000000" stroke-width="4" stroke-linecap="square"/>
-  <line x1="{cx - d:.1f}" y1="{cy + d:.1f}" x2="{cx + d:.1f}" y2="{cy - d:.1f}" stroke="#000000" stroke-width="4" stroke-linecap="square"/>
+  <!-- Visual Center Marker: Crisp Accent X -->
+  <line x1="{cx - d:.1f}" y1="{cy - d:.1f}" x2="{cx + d:.1f}" y2="{cy + d:.1f}" stroke="rgba(59, 130, 246, 0.95)" stroke-width="4" stroke-linecap="square"/>
+  <line x1="{cx - d:.1f}" y1="{cy + d:.1f}" x2="{cx + d:.1f}" y2="{cy - d:.1f}" stroke="rgba(59, 130, 246, 0.95)" stroke-width="4" stroke-linecap="square"/>
 </svg>"""
         return svg
 
@@ -518,12 +504,17 @@ class PageVisualDocBuilder:
 
         measure_data = self.measure_map.get((metric.table, metric.field)) or self.measure_map.get(("", metric.field))
 
+        is_implicit = bool(metric.aggregation) or metric.field_type in ("IMPLICIT_MEASURE", "COLUMN")
+
         is_measure = (
-            metric.field_type == "MEASURE"
-            or (metric.table, metric.field) in self.known_measure_keys
-            or metric.model_key in self.known_measure_keys
-            or metric.field in self.known_measure_keys
-            or bool(measure_data)
+            not is_implicit
+            and (
+                metric.field_type == "MEASURE"
+                or (metric.table, metric.field) in self.known_measure_keys
+                or metric.model_key in self.known_measure_keys
+                or metric.field in self.known_measure_keys
+                or bool(measure_data)
+            )
         )
 
         if is_measure:

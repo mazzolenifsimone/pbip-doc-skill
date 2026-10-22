@@ -37,7 +37,7 @@ SLICER_VISUAL_TYPES = {
     "chickletslicer",
 }
 
-VALUE_METRIC_ROLES = {"y", "values", "data", "size", "measure", "value"}
+VALUE_METRIC_ROLES = {"y", "values", "data", "size", "measure", "value", "analyze"}
 
 SLICING_COORDINATE_ROLES = {
     "category",
@@ -117,12 +117,25 @@ def _extract_field_details(
     return None, None, "UNKNOWN", None
 
 
+IGNORED_OBJECT_KEYS = {
+    "selector",
+    "scopeId",
+    "dataPoint",
+    "drillFilter",
+    "highlight",
+    "filter",
+    "where",
+    "sort",
+}
+
+
 def _find_dynamic_expressions(
     data: Any, alias_map: Optional[Dict[str, str]] = None
 ) -> List[Tuple[str, str, str, Optional[str]]]:
     """
     Recursively scans visual objects/properties for dynamic measure or column expressions.
     Returns list of (table, field, field_type, aggregation).
+    Skips visual node selection / interaction state ASTs (selector, scopeId, dataPoint, etc.).
     """
     results: List[Tuple[str, str, str, Optional[str]]] = []
     if not data:
@@ -136,6 +149,8 @@ def _find_dynamic_expressions(
                 return results
 
         for k, v in data.items():
+            if k in IGNORED_OBJECT_KEYS:
+                continue
             if k == "expr" and isinstance(v, dict):
                 tbl, prop, ftype, agg = _extract_field_details(v, alias_map)
                 if tbl and prop:
@@ -657,12 +672,20 @@ class ReportParser:
                     tbl_name = table or "Unknown"
                     model_key = f"{tbl_name}[{prop}]"
 
+                    display_name = proj.get("displayName") or prop
+
                     if is_slicer:
                         # Slicers are tracked in page_slicers, but also record their coordinate
                         slicing_coordinates.append(
-                            SlicingCoordinate(role=f"Slicer ({role_name})", table=tbl_name, field=prop, model_key=model_key)
+                            SlicingCoordinate(
+                                role=f"Slicer ({role_name})",
+                                table=tbl_name,
+                                field=prop,
+                                model_key=model_key,
+                                display_name=display_name,
+                            )
                         )
-                    elif role_lower in VALUE_METRIC_ROLES:
+                    elif role_lower in VALUE_METRIC_ROLES or f_type in ("MEASURE", "IMPLICIT_MEASURE") or agg is not None:
                         evaluated_metrics.append(
                             EvaluatedMetric(
                                 table=tbl_name,
@@ -671,11 +694,18 @@ class ReportParser:
                                 role=role_name,
                                 model_key=model_key,
                                 aggregation=agg,
+                                display_name=display_name,
                             )
                         )
                     else:
                         slicing_coordinates.append(
-                            SlicingCoordinate(role=role_name, table=tbl_name, field=prop, model_key=model_key)
+                            SlicingCoordinate(
+                                role=role_name,
+                                table=tbl_name,
+                                field=prop,
+                                model_key=model_key,
+                                display_name=display_name,
+                            )
                         )
 
             # Visual active filters
@@ -705,9 +735,10 @@ class ReportParser:
                             known_keys.add(m_key)
 
             # Title extraction / synthesis
-            title = self._extract_custom_title(vjson)
+            title, is_conditional = self._extract_custom_title(vjson)
             if not title:
                 title = self._synthesize_visual_title(visual_type, evaluated_metrics, slicing_coordinates, is_slicer)
+                is_conditional = False
 
             calc_context = CalculationContext(
                 evaluated_metrics=evaluated_metrics,
@@ -725,6 +756,7 @@ class ReportParser:
                     visual_type=visual_type,
                     is_hidden=effective_is_hidden,
                     is_slicer=is_slicer,
+                    is_conditional_title=is_conditional,
                     spatial_position=spatial_pos,
                     calculation_context=calc_context,
                     parent_group_name=meta.get("parent_group_name"),
@@ -925,11 +957,31 @@ class ReportParser:
                     tbl_name = table or "Unknown"
                     model_key = f"{tbl_name}[{prop}]"
 
+                    # Determine on-screen display name / alias
+                    display_name = p.get("displayName")
+                    if not display_name and matched_select:
+                        sel_name = matched_select.get("Name", "")
+                        if sel_name and "." in sel_name:
+                            part = sel_name.split(".", 1)[1]
+                            if part.endswith(")") and "(" not in part:
+                                part = part[:-1]
+                            display_name = part
+                        elif sel_name:
+                            display_name = sel_name
+                    if not display_name:
+                        display_name = prop
+
                     if is_slicer:
                         slicing_coordinates.append(
-                            SlicingCoordinate(role=f"Slicer ({role_name})", table=tbl_name, field=prop, model_key=model_key)
+                            SlicingCoordinate(
+                                role=f"Slicer ({role_name})",
+                                table=tbl_name,
+                                field=prop,
+                                model_key=model_key,
+                                display_name=display_name,
+                            )
                         )
-                    elif role_lower in VALUE_METRIC_ROLES:
+                    elif role_lower in VALUE_METRIC_ROLES or f_type in ("MEASURE", "IMPLICIT_MEASURE") or agg is not None:
                         evaluated_metrics.append(
                             EvaluatedMetric(
                                 table=tbl_name,
@@ -938,11 +990,18 @@ class ReportParser:
                                 role=role_name,
                                 model_key=model_key,
                                 aggregation=agg,
+                                display_name=display_name,
                             )
                         )
                     else:
                         slicing_coordinates.append(
-                            SlicingCoordinate(role=role_name, table=tbl_name, field=prop, model_key=model_key)
+                            SlicingCoordinate(
+                                role=role_name,
+                                table=tbl_name,
+                                field=prop,
+                                model_key=model_key,
+                                display_name=display_name,
+                            )
                         )
 
             # Visual active filters
@@ -986,9 +1045,12 @@ class ReportParser:
                             )
                             known_keys.add(m_key)
 
-            title = self._extract_custom_title(cfg, alias_map) or self._extract_custom_title(sv, alias_map)
+            title, is_conditional = self._extract_custom_title(cfg, alias_map)
+            if not title:
+                title, is_conditional = self._extract_custom_title(sv, alias_map)
             if not title:
                 title = self._synthesize_visual_title(visual_type, evaluated_metrics, slicing_coordinates, is_slicer)
+                is_conditional = False
 
             calc_context = CalculationContext(
                 evaluated_metrics=evaluated_metrics,
@@ -1006,6 +1068,7 @@ class ReportParser:
                     visual_type=visual_type,
                     is_hidden=effective_is_hidden,
                     is_slicer=is_slicer,
+                    is_conditional_title=is_conditional,
                     spatial_position=spatial_pos,
                     calculation_context=calc_context,
                     parent_group_name=meta.get("parent_group_name"),
@@ -1109,15 +1172,55 @@ class ReportParser:
                 )
         return active
 
+    FRIENDLY_VISUAL_TYPES = {
+        "barchart": "Bar Chart",
+        "clusteredbarchart": "Clustered Bar Chart",
+        "columnchart": "Column Chart",
+        "clusteredcolumnchart": "Clustered Column Chart",
+        "linechart": "Line Chart",
+        "areachart": "Area Chart",
+        "lineclusteredcolumncombochart": "Line & Clustered Column Chart",
+        "piechart": "Pie Chart",
+        "donutchart": "Donut Chart",
+        "scatterchart": "Scatter Chart",
+        "tableex": "Table",
+        "pivottable": "Matrix",
+        "card": "Card",
+        "multicard": "Multi-Row Card",
+        "gauge": "Gauge",
+        "kpi": "KPI",
+        "slicer": "Slicer",
+        "map": "Map",
+        "filledmap": "Filled Map",
+        "shape": "Shape",
+        "actionbutton": "Action Button",
+        "textbox": "Textbox",
+        "image": "Image",
+        "keydriversvisual": "Key Influencers",
+        "decompositiontree": "Decomposition Tree",
+        "anomalydetection": "Anomaly Detection",
+        "qna": "Q&A",
+        "waterfallchart": "Waterfall Chart",
+        "funnel": "Funnel",
+        "treemap": "Treemap",
+    }
+
     def _extract_custom_title(
-        self, vjson: Dict[str, Any], alias_map: Optional[Dict[str, str]] = None
-    ) -> Optional[str]:
-        """Tries to extract user-defined title from visual objects (both static and dynamic expressions)."""
+        self, vjson: Optional[Dict[str, Any]], alias_map: Optional[Dict[str, str]] = None
+    ) -> Tuple[Optional[str], bool]:
+        """
+        Tries to extract user-defined title from visual objects.
+        Returns (title_str, is_conditional).
+        If title formatting is inactive/disabled (show: false) or not set, returns (None, False),
+        allowing the doc generator to fall back to the reconstructed/synthesized title.
+        """
         if not vjson or not isinstance(vjson, dict):
-            return None
+            return None, False
 
         candidate_containers = [
             vjson.get("visualContainerObjects", {}),
+            vjson.get("singleVisual", {}).get("vcObjects", {}),
+            vjson.get("vcObjects", {}),
             vjson.get("visual", {}).get("objects", {}),
             vjson.get("objects", {}),
             vjson.get("singleVisual", {}).get("objects", {}),
@@ -1128,16 +1231,37 @@ class ReportParser:
             title_objs = container.get("title", [])
             if isinstance(title_objs, list) and len(title_objs) > 0:
                 t_props = title_objs[0].get("properties", {})
-                expr = t_props.get("text", {}).get("expr", {})
-                lit_val = expr.get("Literal", {}).get("Value")
-                if lit_val is not None:
-                    clean_title = str(lit_val).strip("'")
-                    if clean_title:
-                        return clean_title
-                tbl, prop, _, _ = _extract_field_details(expr, alias_map)
-                if tbl and prop:
-                    return f"Dynamic Title: {tbl}[{prop}]"
-        return None
+                
+                # Check title visibility (show property)
+                show_prop = t_props.get("show", {}).get("expr", {}).get("Literal", {}).get("Value")
+                if show_prop is not None:
+                    clean_show = str(show_prop).strip("'\"").lower()
+                    if clean_show in ("false", "0"):
+                        # Title explicitly turned off in Power BI format pane!
+                        return None, False
+
+                text_prop = t_props.get("text", {})
+                if isinstance(text_prop, dict):
+                    expr = text_prop.get("expr", text_prop)
+                    lit_val = expr.get("Literal", {}).get("Value") if isinstance(expr, dict) else None
+                    if lit_val is not None:
+                        clean_title = str(lit_val).strip("'")
+                        if clean_title:
+                            return clean_title, False
+                    tbl, prop, _, _ = _extract_field_details(expr, alias_map)
+                    if tbl and prop:
+                        return f"{tbl}[{prop}]", True
+                    elif prop:
+                        return f"[{prop}]", True
+
+                    dyn = _find_dynamic_expressions(text_prop, alias_map)
+                    if dyn:
+                        dtbl, dprop, _, _ = dyn[0]
+                        if dtbl and dprop:
+                            return f"{dtbl}[{dprop}]", True
+                        elif dprop:
+                            return f"[{dprop}]", True
+        return None, False
 
     def _synthesize_visual_title(
         self,
@@ -1146,25 +1270,48 @@ class ReportParser:
         slicing_coordinates: List[SlicingCoordinate],
         is_slicer: bool,
     ) -> str:
-        """Synthesizes human-friendly title if no custom title is defined in formatting."""
+        """Synthesizes human-friendly reconstructed title based on visual type, metrics, and dimensions."""
+        vt_lower = visual_type.lower()
+        friendly_type = self.FRIENDLY_VISUAL_TYPES.get(vt_lower, visual_type)
+
         if is_slicer:
             if slicing_coordinates:
                 first = slicing_coordinates[0]
-                return f"Slicer: {first.table}[{first.field}]"
+                return f"Slicer: {first.display_name or first.field}"
             return "Slicer Control"
 
+        if vt_lower == "keydriversvisual":
+            target_coord = next((c for c in slicing_coordinates if "target" in c.role.lower()), None)
+            if target_coord:
+                target_name = target_coord.display_name or target_coord.field
+                return f"Key Influencers: {target_name}"
+            return "Key Influencers"
+
+        if vt_lower in ("decompositiontree", "decompositiontreevisual"):
+            if evaluated_metrics:
+                m = evaluated_metrics[0]
+                return f"Decomposition Tree: {m.display_name or m.field}"
+            return "Decomposition Tree"
+
         if evaluated_metrics and slicing_coordinates:
-            m_names = ", ".join(m.field for m in evaluated_metrics[:2])
-            c_name = slicing_coordinates[0].field
+            m_names = ", ".join(m.display_name or m.field for m in evaluated_metrics[:2])
+            c_name = slicing_coordinates[0].display_name or slicing_coordinates[0].field
             return f"{m_names} by {c_name}"
 
         if evaluated_metrics:
-            return ", ".join(m.field for m in evaluated_metrics)
+            return ", ".join(m.display_name or m.field for m in evaluated_metrics)
 
-        if visual_type.lower() in ("textbox", "shape", "image"):
-            return visual_type.capitalize()
+        if slicing_coordinates:
+            if len(slicing_coordinates) >= 2:
+                c1 = slicing_coordinates[0].display_name or slicing_coordinates[0].field
+                c2 = slicing_coordinates[1].display_name or slicing_coordinates[1].field
+                return f"{c1} by {c2}"
+            return f"{friendly_type}: {slicing_coordinates[0].display_name or slicing_coordinates[0].field}"
 
-        return f"Untitled {visual_type}"
+        if vt_lower in ("textbox", "shape", "image"):
+            return friendly_type
+
+        return friendly_type
 
     def _build_alias_map(self, from_list: List[Dict[str, Any]]) -> Dict[str, str]:
         """Builds mapping from source alias (e.g. 'o1') to Entity name (e.g. 'Opportunities')."""
