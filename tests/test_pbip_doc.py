@@ -6,6 +6,7 @@ Vanilla Python unittest suite.
 import unittest
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from pbip_doc.m_lineage import MLineageResolver
 from pbip_doc.star_schema import StarSchemaResolver
 from pbip_doc.measure_analyzer import MeasureDependencyResolver
 from pbip_doc.model_schema import PBIPSemanticModel, TableDefinition, ColumnDefinition, RelationshipDefinition, MeasureDefinition, TableRole, TableRoleClassification
+from pbip_doc.report_schema import PBIPReportModel, PageDefinition, VisualDefinition, CalculationContext, EvaluatedMetric
 from pbip_doc.docgen import MarkdownDocGenerator, DocGenConfig
 
 
@@ -60,11 +62,11 @@ class TestMarkdownDocGenerator(unittest.TestCase):
         generator = MarkdownDocGenerator()
         docs = generator.generate_all_documents(sample_model)
 
-        self.assertIn("INDEX.md", docs)
+        self.assertIn("TestModel.md", docs)
         self.assertIn("tables/FactOrders.md", docs)
         self.assertIn("measures/FactOrders/Total_Sales.md", docs)
 
-        self.assertIn("pbip_project: TestModel", docs["INDEX.md"])
+        self.assertIn("pbip_project: TestModel", docs["TestModel.md"])
 
         fact_doc = docs["tables/FactOrders.md"]
         self.assertTrue(fact_doc.startswith("---"))
@@ -1150,13 +1152,13 @@ class TestExpressionDocGen(unittest.TestCase):
         generator = MarkdownDocGenerator()
         docs = generator.generate_all_documents(sample_model)
 
-        self.assertIn("INDEX.md", docs)
+        self.assertIn("TestModel.md", docs)
         self.assertIn("tables/FactOrders.md", docs)
         self.assertIn("expressions/Staging_Orders.md", docs)
-        self.assertIn("pbip_project: TestModel", docs["INDEX.md"])
+        self.assertIn("pbip_project: TestModel", docs["TestModel.md"])
         self.assertIn("pbip_project: TestModel", docs["expressions/Staging_Orders.md"])
-        self.assertIn("## Power Query Expressions & Shared ETL Queries", docs["INDEX.md"])
-        self.assertIn("Staging_Orders", docs["INDEX.md"])
+        self.assertIn("## Power Query Expressions & Shared ETL Queries", docs["TestModel.md"])
+        self.assertIn("Staging_Orders", docs["TestModel.md"])
 
 
 class TestInheritedEntitiesAndExternalMeasures(unittest.TestCase):
@@ -1264,14 +1266,14 @@ class TestInheritedEntitiesAndExternalMeasures(unittest.TestCase):
         docs = generator.generate_all_documents(sample_model)
 
         # 1. Local files generated, inherited standalone files skipped
-        self.assertIn("INDEX.md", docs)
+        self.assertIn("CompositeReportModel.md", docs)
         self.assertIn("tables/LocalTargets.md", docs)
         self.assertNotIn("tables/Customer.md", docs)
         self.assertNotIn("measures/Customer/Total_Sales.md", docs)
         self.assertIn("measures/Customer/Local_Stretch_KPI.md", docs)
 
-        # 2. In INDEX.md, inherited table and external measure are indexed without dead links
-        index_md = docs["INDEX.md"]
+        # 2. In index, inherited table and external measure are indexed without dead links
+        index_md = docs["CompositeReportModel.md"]
         self.assertIn("`Customer`", index_md)
         self.assertIn("— *(Inherited Entity)*", index_md)
         self.assertIn("📦 Inherited", index_md)
@@ -1692,8 +1694,8 @@ class TestCalculatedTables(unittest.TestCase):
         docs = generator.generate_all_documents(sample_model)
 
         # 1. Index contains DAX Calc badge and notice
-        self.assertIn("INDEX.md", docs)
-        index_doc = docs["INDEX.md"]
+        self.assertIn("TestCalcModel.md", docs)
+        index_doc = docs["TestCalcModel.md"]
         self.assertIn("🧮 DAX Calc", index_doc)
         self.assertIn("Calculated Tables", index_doc)
 
@@ -2102,7 +2104,7 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         generator = MarkdownDocGenerator(config=cfg)
         docs = generator.generate_all_documents(sample_model)
 
-        index_doc = docs["INDEX.md"]
+        index_doc = docs["TestModel.md"]
         self.assertIn(f"[`FactOrders`]({base_url}/tables/FactOrders.md)", index_doc)
         self.assertIn(f"[`[Total Sales]`]({base_url}/measures/FactOrders/Total_Sales.md)", index_doc)
 
@@ -2181,7 +2183,7 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         # Direct dependency RemoteCost should now have link to external doc!
         self.assertIn("[RemoteCost](https://docs.company.internal/models/CentralDataModel/measures/DimCustomer/RemoteCost.md)", margin_doc1)
 
-        index_doc1 = docs1["INDEX.md"]
+        index_doc1 = docs1["CompositeModel.md"]
         self.assertIn("[`[RemoteCost]`](https://docs.company.internal/models/CentralDataModel/measures/DimCustomer/RemoteCost.md) *(External)*", index_doc1)
 
         # Case 2: NO external doc URL configured -> retains current fallback message without link
@@ -2197,7 +2199,7 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
         self.assertNotIn("https://", margin_doc2)
         self.assertIn("`[RemoteCost]` *(External Measure)*", margin_doc2)
 
-        index_doc2 = docs2["INDEX.md"]
+        index_doc2 = docs2["CompositeModel.md"]
         self.assertIn("*(External Measure)*", index_doc2)
 
     def test_cli_flags_doc_urls(self):
@@ -2300,8 +2302,8 @@ class TestExternalDocUrlsAndCli(unittest.TestCase):
             gen = MarkdownDocGenerator(config=cfg)
             docs = gen.generate_all_documents(model.to_dict())
 
-            index_md = docs["INDEX.md"]
-            # 1. Physical data sources section in INDEX.md
+            index_md = next(v for k, v in docs.items() if "/" not in k and "\\" not in k and k.endswith(".md"))
+            # 1. Physical data sources section in master index
             self.assertIn("## Detected Physical Data Sources", index_md)
             self.assertIn("`POWERBI_SEMANTIC_MODEL`", index_md)
             self.assertIn("`powerbi://api.powerbi.com/v1.0/myorg/Workgroup`", index_md)
@@ -2434,17 +2436,282 @@ class TestPBIPProjectFrontmatter(unittest.TestCase):
         generator = MarkdownDocGenerator(cfg)
         docs = generator.generate_all_documents(sample_model)
 
-        self.assertIn("INDEX.md", docs)
+        self.assertIn("Enterprise_ERP_BI.md", docs)
         self.assertIn("tables/DimStore.md", docs)
         self.assertIn("measures/DimStore/StoreCount.md", docs)
         self.assertIn("functions/fx_FormatCurrency.md", docs)
         self.assertIn("expressions/Staging_Store.md", docs)
 
-        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["INDEX.md"])
+        self.assertIn("pbip_project: Enterprise_ERP_BI", docs["Enterprise_ERP_BI.md"])
         self.assertIn("pbip_project: Enterprise_ERP_BI", docs["tables/DimStore.md"])
         self.assertIn("pbip_project: Enterprise_ERP_BI", docs["measures/DimStore/StoreCount.md"])
         self.assertIn("pbip_project: Enterprise_ERP_BI", docs["functions/fx_FormatCurrency.md"])
         self.assertIn("pbip_project: Enterprise_ERP_BI", docs["expressions/Staging_Store.md"])
+
+
+class TestIndexDocumentationReachability(unittest.TestCase):
+    """
+    Verifies that from the master INDEX.md, every generated lower-level markdown document
+    (tables, measures, functions, expressions, report visuals/pages) is directly reachable via Markdown link.
+    """
+
+    def _build_full_synthetic_model(self):
+        model_data = {
+            "model_name": "ReachabilityModel",
+            "source_format": "TMDL",
+            "compatibility_level": 1600,
+            "culture": "en-US",
+            "tables": [
+                {
+                    "name": "FactInternetSales",
+                    "role": "FACT",
+                    "columns": [{"name": "SalesOrderNumber", "data_type": "string", "is_key": True}],
+                    "source_type": "M_Partition",
+                },
+                {
+                    "name": "DimCustomer",
+                    "role": "DIMENSION",
+                    "columns": [{"name": "CustomerKey", "data_type": "int64", "is_key": True}],
+                    "source_type": "M_Partition",
+                },
+                {
+                    "name": "DimDate",
+                    "role": "DATE_DIMENSION",
+                    "columns": [{"name": "DateKey", "data_type": "int64"}],
+                    "source_type": "CalculatedTable",
+                },
+                {
+                    "name": "LocalDateTable_excluded",
+                    "role": "DATE_DIMENSION",
+                    "columns": [{"name": "Date", "data_type": "datetime"}],
+                    "source_type": "CalculatedTable",
+                },
+                {
+                    "name": "InheritedExternalTable",
+                    "role": "DIMENSION",
+                    "is_inherited": True,
+                    "columns": [],
+                },
+            ],
+            "measures": [
+                {
+                    "name": "Total Sales",
+                    "table": "FactInternetSales",
+                    "dax_expression": "SUM(FactInternetSales[SalesAmount])",
+                    "calculation_depth": 0,
+                    "direct_measure_dependencies": [],
+                },
+                {
+                    "name": "Total Margin",
+                    "table": "FactInternetSales",
+                    "dax_expression": "[Total Sales] - [Total Product Cost]",
+                    "calculation_depth": 1,
+                    "direct_measure_dependencies": ["Total Sales"],
+                },
+                {
+                    "name": "Customer Count",
+                    "table": "DimCustomer",
+                    "dax_expression": "DISTINCTCOUNT(DimCustomer[CustomerKey])",
+                    "calculation_depth": 0,
+                },
+                {
+                    "name": "External Measure Example",
+                    "table": "FactInternetSales",
+                    "is_external_measure": True,
+                },
+            ],
+            "functions": [
+                {
+                    "name": "fx_FormatCurrency",
+                    "return_type": "String",
+                    "parameters_signature": "(val: Currency)",
+                    "downstream_measures": ["Total Sales"],
+                }
+            ],
+            "expressions": [
+                {
+                    "query_name": "Staging_Sales_Raw",
+                    "full_m_expression": "let Source = Csv.Document(...) in Source",
+                    "downstream_tables": ["FactInternetSales"],
+                    "root_sources": [{"source_type": "FILE"}],
+                },
+                {
+                    "query_name": "Inline_TaxRates",
+                    "is_inline_table": True,
+                    "full_m_expression": "#table(...)",
+                    "inline_table_columns": ["State", "Rate"],
+                    "inline_table_rows": [["CA", "0.08"]],
+                },
+            ],
+            "data_sources_summary": [{"source_type": "SQL_SERVER", "connection_string": "sql.corp.internal"}],
+        }
+
+        report_model = PBIPReportModel(
+            report_name="SalesOverviewReport",
+            format="PBIR",
+            source_path="mock/path",
+            pages=[
+                PageDefinition(
+                    page_id="page_1",
+                    display_name="Executive Summary",
+                    page_number=1,
+                    width=1920,
+                    height=1080,
+                    visuals=[
+                        VisualDefinition(
+                            visual_id="v1",
+                            title="Sales Trend",
+                            visual_type="lineChart",
+                            calculation_context=CalculationContext(
+                                evaluated_metrics=[
+                                    EvaluatedMetric(
+                                        table="FactInternetSales",
+                                        field="Total Sales",
+                                        field_type="MEASURE",
+                                        role="Y",
+                                        model_key="FactInternetSales[Total Sales]",
+                                    )
+                                ]
+                            ),
+                        )
+                    ],
+                ),
+                PageDefinition(
+                    page_id="page_2",
+                    display_name="Customer Analytics",
+                    page_number=2,
+                    is_hidden=True,
+                    visuals=[],
+                ),
+            ],
+        )
+
+        return model_data, report_model
+
+    def test_all_generated_markdown_reachable_from_index_default_config(self):
+        """Verify that every single generated markdown file is directly linked in <project_name>.md with default config."""
+        model_data, report = self._build_full_synthetic_model()
+        cfg = DocGenConfig(include_visual_docs=True, include_expression_docs=True)
+        gen = MarkdownDocGenerator(cfg)
+        gen._resolve_report = lambda m: report
+
+        docs = gen.generate_all_documents(model_data)
+
+        index_name = "SalesOverviewReport.md"
+        self.assertIn(index_name, docs)
+        index_content = docs[index_name]
+        links = set(re.findall(r'\[.*?\]\(([^)]+)\)', index_content))
+
+        # Filter only generated lower-level markdown documents
+        lower_level_md_files = [k for k in docs.keys() if k != index_name and k.endswith(".md")]
+        self.assertGreater(len(lower_level_md_files), 0)
+
+        unreachable = []
+        for doc_rel_path in lower_level_md_files:
+            # The link in master index should equal doc_rel_path or ./doc_rel_path
+            if doc_rel_path not in links and f"./{doc_rel_path}" not in links:
+                unreachable.append(doc_rel_path)
+
+        self.assertEqual(
+            unreachable,
+            [],
+            f"The following generated markdown documents are not directly linked from {index_name}: {unreachable}",
+        )
+
+    def test_all_generated_markdown_reachable_custom_subdirectories(self):
+        """Verify reachability from master index when subdirectories have custom names or trailing slashes."""
+        model_data, report = self._build_full_synthetic_model()
+        cfg = DocGenConfig(
+            tables_subdir="data_tables/",
+            measures_subdir="kpi_measures/",
+            functions_subdir="udf_functions/",
+            expressions_subdir="etl_expressions/",
+            visuals_subdir="pbi_visuals/",
+            include_visual_docs=True,
+            include_expression_docs=True,
+        )
+        gen = MarkdownDocGenerator(cfg)
+        gen._resolve_report = lambda m: report
+
+        docs = gen.generate_all_documents(model_data)
+
+        index_name = "SalesOverviewReport.md"
+        self.assertIn(index_name, docs)
+        index_content = docs[index_name]
+        links = set(re.findall(r'\[.*?\]\(([^)]+)\)', index_content))
+
+        lower_level_md_files = [k for k in docs.keys() if k != index_name and k.endswith(".md")]
+        self.assertGreater(len(lower_level_md_files), 0)
+
+        unreachable = []
+        for doc_rel_path in lower_level_md_files:
+            if doc_rel_path not in links and f"./{doc_rel_path}" not in links:
+                unreachable.append(doc_rel_path)
+
+        self.assertEqual(
+            unreachable,
+            [],
+            f"With custom subdirectories, the following files are not linked in {index_name}: {unreachable}",
+        )
+
+    def test_reachability_sample_adventureworks(self):
+        """Verify reachability on real PBIP sample: AdventureWorks Sales."""
+        adv_dir = Path("samples/AdventureWorks Sales")
+        if not adv_dir.exists():
+            self.skipTest("Sample AdventureWorks Sales directory not found")
+
+        gen = MarkdownDocGenerator()
+        docs = gen.generate_all_documents(adv_dir)
+
+        index_name = "AdventureWorks Sales.md"
+        self.assertIn(index_name, docs)
+        index_content = docs[index_name]
+        links = set(re.findall(r'\[.*?\]\(([^)]+)\)', index_content))
+
+        lower_level_md_files = [k for k in docs.keys() if k != index_name and k.endswith(".md")]
+        self.assertGreater(len(lower_level_md_files), 0)
+
+        unreachable = []
+        for doc_rel_path in lower_level_md_files:
+            if doc_rel_path not in links and f"./{doc_rel_path}" not in links:
+                unreachable.append(doc_rel_path)
+
+        self.assertEqual(
+            unreachable,
+            [],
+            f"In AdventureWorks Sales sample, the following files are not linked in {index_name}: {unreachable}",
+        )
+
+    def test_no_phantom_links_when_expressions_or_visuals_disabled(self):
+        """Verify that when expression or visual docs are disabled, no links to missing files are present."""
+        model_data, report = self._build_full_synthetic_model()
+        cfg = DocGenConfig(include_visual_docs=False, include_expression_docs=False)
+        gen = MarkdownDocGenerator(cfg)
+        gen._resolve_report = lambda m: report
+
+        docs = gen.generate_all_documents(model_data)
+        index_name = "SalesOverviewReport.md"
+        self.assertIn(index_name, docs)
+        index_content = docs[index_name]
+        links = set(re.findall(r'\[.*?\]\(([^)]+)\)', index_content))
+
+        # Check no links start with expressions/ or visuals/
+        expr_links = [l for l in links if l.startswith("expressions/")]
+        vis_links = [l for l in links if l.startswith("visuals/")]
+
+        self.assertEqual(expr_links, [], f"Found phantom expression links in {index_name}: {expr_links}")
+        self.assertEqual(vis_links, [], f"Found phantom visual links in {index_name}: {vis_links}")
+
+    def test_custom_index_filename_override(self):
+        """Verify that setting config.index_filename explicitly overrides the default <project_name>.md naming."""
+        model_data, report = self._build_full_synthetic_model()
+        cfg = DocGenConfig(index_filename="CUSTOM_INDEX.md")
+        gen = MarkdownDocGenerator(cfg)
+        gen._resolve_report = lambda m: report
+
+        docs = gen.generate_all_documents(model_data)
+        self.assertIn("CUSTOM_INDEX.md", docs)
+        self.assertNotIn("ReachabilityModel.md", docs)
 
 
 if __name__ == "__main__":

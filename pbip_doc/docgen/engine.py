@@ -7,6 +7,7 @@ Vanilla Python implementation.
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, Union, Optional
 
@@ -35,7 +36,7 @@ class MarkdownDocGenerator:
         """
         Generates in-memory dictionary of all markdown documents:
         {
-          "INDEX.md": content,
+          "<project_name>.md": content,
           "tables/FactInternetSales.md": content,
           "measures/Sales/Total_Sales.md": content,
           "expressions/Staging_Orders.md": content,
@@ -49,10 +50,12 @@ class MarkdownDocGenerator:
         data["project_name"] = project_name
         documents: Dict[str, str] = {}
 
-        # 1. Master Catalog (INDEX.md)
+        # 1. Master Catalog (<project_name>.md)
         if self.config.generate_index_file:
             index_builder = IndexDocBuilder(data, self.config, report_model=report_model, project_name=project_name)
-            documents["INDEX.md"] = index_builder.build_markdown()
+            safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', project_name).strip('. ') or "PBIP"
+            index_filename = self.config.index_filename or f"{safe_name}.md"
+            documents[index_filename] = index_builder.build_markdown()
 
         # 2. Table Documents (one markdown per table)
         tables_sub = self.config.tables_subdir.strip("/\\")
@@ -97,7 +100,7 @@ class MarkdownDocGenerator:
             expr_list = data.get("expressions") or data.get("shared_queries") or []
             for expr in expr_list:
                 expr_builder = ExpressionDocBuilder(expr, data, self.config, project_name=project_name)
-                clean_name = sanitize_filename(expr.get("query_name", "expression"))
+                clean_name = sanitize_filename(expr.get("query_name") or "expression")
                 expr_filename = f"{clean_name}.md"
                 doc_path = f"{expressions_sub}/{expr_filename}" if expressions_sub else expr_filename
                 documents[doc_path] = expr_builder.build_markdown()

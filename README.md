@@ -45,7 +45,7 @@ The documentation workflow is designed in **two independent, modular phases**:
    - Resolves **Power Query (M)** lineage back to root physical sources (SQL Server, OData, SharePoint, Web, Excel, Lakehouse, PostgreSQL).
    - Classifies tables into roles (**Fact**, **Dimension**, **Lookup / Outrigger**) and maps all recursive **Snowflake** paths.
    - Computes the **DAX Measure Dependency DAG** (calculation depth, upstream dependencies, downstream impact, and referenced columns).
-2. **Phase 2 (Document Generator)**: Consumes the extracted JSON to build clean, modular Markdown documentation pages for every table, measure, function, and ETL expression.
+2. **Phase 2 (Document Generator)**: Consumes the extracted JSON (or raw PBIP folder) to build clean, modular Markdown documentation pages for every table, measure, function, ETL expression, and report page/visual context.
 
 ---
 
@@ -59,6 +59,7 @@ The documentation workflow is designed in **two independent, modular phases**:
   - ✅ **Power Query Lineage**: multi-hop tracing from raw data source -> staging queries -> merge/append -> final model table.
   - ✅ **Star Schema & Snowflake Topology**: automatically classifies tables and maps outrigger lookup paths (e.g., `FactSales` -> `DimCustomer` -> `DimGeography` -> `DimCountry`).
   - ✅ **DAX Measure DAG**: directed acyclic graph, calculation depth (Depth 0, 1, 2...), upstream dependencies, and downstream impact analysis.
+  - ✅ **Report Presentation & Visuals (PBIR / Legacy)**: canvas filter perimeter (locked, interactive, slicers), dynamic visuals catalog, metric bindings, and scaled SVG canvas mini-maps.
 
 ---
 
@@ -69,6 +70,7 @@ The documentation workflow is designed in **two independent, modular phases**:
 │   ├── __init__.py                # Package exports
 │   ├── model_schema.py            # Dataclasses and JSON schema
 │   ├── parser.py                  # TMDL and BIM parser
+│   ├── report_parser.py           # PBIR and legacy report presentation parser
 │   ├── m_lineage.py               # Power Query (M) lineage resolver
 │   ├── star_schema.py             # Star schema classifier and Snowflake resolver
 │   ├── measure_analyzer.py        # DAX tokenizer and measure DAG analyzer
@@ -80,16 +82,18 @@ The documentation workflow is designed in **two independent, modular phases**:
 │   │   ├── table_doc.py           # Table Markdown builder
 │   │   ├── measure_doc.py         # Measure Markdown builder
 │   │   ├── function_doc.py        # DAX UDF function Markdown builder
-│   │   ├── expression_doc.py     # Shared query / expression Markdown builder
-│   │   ├── index_doc.py           # Master index (INDEX.md) builder
+│   │   ├── expression_doc.py      # Shared query / expression Markdown builder
+│   │   ├── visual_doc.py          # Report page and visual Markdown builder
+│   │   ├── index_doc.py           # Master catalog (<project_name>.md) builder
 │   │   └── engine.py              # Documentation orchestrator
 │   └── cli.py                     # Command-line interface (CLI)
 ├── samples/                       # Sample PBIP models for testing
-│   ├── adventureworks_pbip/       # TMDL model (Fact, Dim, Outriggers, M Staging, DAX)
+│   ├── AdventureWorks Sales/      # PBIP project (.SemanticModel + .Report)
 │   └── retail_sales_bim/          # TMSL model.bim file
 ├── tests/                         # Unit tests (standard unittest)
 │   ├── __init__.py
-│   └── test_pbip_doc.py
+│   ├── test_pbip_doc.py
+│   └── test_report_parser.py
 ├── documentation/                 # Technical documentation and specs
 │   ├── json_schema/               # Phase 1: JSON field specifications and extraction logic
 │   └── markdown_generator/        # Phase 2: Markdown generation specifications and RAG patterns
@@ -113,19 +117,22 @@ The tool runs with **Python 3.8+** using standard CLI commands. No extra package
 ### Quick Commands
 
 ```bash
-# 1. Generate Modular Markdown Documentation (Tables, Measures, Expressions, INDEX.md)
-python generate_docs.py ./samples/adventureworks_pbip -o ./docs
+# 1. Generate Modular Markdown Documentation (Tables, Measures, Visuals, <project_name>.md)
+python generate_docs.py "samples/AdventureWorks Sales" -o ./docs
 
 # 2. Extract Complete Enriched JSON
-python generate_json.py extract ./samples/adventureworks_pbip -o semantic_model_docs.json
+python generate_json.py extract "samples/AdventureWorks Sales" -o semantic_model_docs.json
 
 # 3. Quick Console Inspection Summary
-python generate_json.py inspect ./samples/adventureworks_pbip
+python generate_json.py inspect "samples/AdventureWorks Sales"
 
-# 4. Run the Test Suite
+# 4. Quick Report Presentation Summary
+python generate_json.py report-inspect "samples/AdventureWorks Sales"
+
+# 5. Run the Test Suite
 python -m unittest discover tests
 
-# 5. Run Native MCP Server
+# 6. Run Native MCP Server
 python mcp_server.py
 ```
 
@@ -221,11 +228,18 @@ You have flexible methods to configure runs:
   "include_table_snowflake_paths": true,
   "include_table_measures_list": true,
   "include_table_m_code": true,
+  "include_visual_docs": true,
+  "include_visual_svg_maps": true,
   "output_dir": "docs",
   "tables_subdir": "tables",
   "measures_subdir": "measures",
   "expressions_subdir": "expressions",
   "functions_subdir": "functions",
+  "visuals_subdir": "visuals",
+  "visual_assets_subdir": "assets",
+  "project_name": null,
+  "index_filename": null,
+  "report_path": null,
   "include_markdown_links": true,
   "base_doc_url": null,
   "external_docs_base_url": null,
@@ -239,6 +253,11 @@ You have flexible methods to configure runs:
 - `--include-inherited-entities`: include and publish standalone documentation files for inherited tables (`partition = entity`) and external measures (`EXTERNALMEASURE`).
 - `--no-frontmatter`: omit YAML frontmatter at top of markdown files.
 - `--no-m-code`: omit raw M code snippets from table documents.
+- `--no-visuals`: disable generation of report page and visual markdowns.
+- `--no-visual-svg-maps`: generate text-only visual catalogs without scaled SVG canvas mini-maps.
+- `--visuals-dir <DIR>`: customize subdirectory for report page docs (default: `visuals`).
+- `--report-path <PATH>`: explicit path to associated `*.Report` directory or `report.json`.
+- `--project-name <NAME>`: explicit project name override (used in YAML frontmatter and master `<project_name>.md` filename).
 - `--base-doc-url <URL>` / `--base-doc-path <PATH>`: set the base URL or absolute path for the documentation currently being generated (e.g. `https://docs.company.internal/bi/SalesModel` or `/mnt/docs/SalesModel`). Replaces relative links with absolute links across all Markdown pages.
 - `--external-docs-base-url <URL>` / `--external-docs-base-path <PATH>`: set the base URL or shared folder containing documentation for all external models (organized as `<url>/<model_name>/tables/...`).
 - `--external-doc-path NAME=URL`: set documentation absolute path for a specific external reference by name (can be repeated, e.g. `--external-doc-path CentralDataModel=https://docs.company.internal/bi/CentralDataModel`).
@@ -310,13 +329,13 @@ In architectures using a central **Golden Dataset** with multiple thin reports (
 Prints an overview of data sources, table classifications, calculated columns, and DAX dependencies:
 
 ```bash
-python generate_json.py inspect ./samples/adventureworks_pbip
+python generate_json.py inspect "samples/AdventureWorks Sales"
 ```
 
 Example output:
 ```text
 ======================================================================
-PBIP SEMANTIC MODEL: adventureworks_pbip (Format: TMDL)
+PBIP SEMANTIC MODEL: AdventureWorks Sales (Format: TMDL)
 ======================================================================
 [!] Excluded Auto Tables: 1 (Filter active: True)
 
@@ -361,7 +380,7 @@ PBIP SEMANTIC MODEL: adventureworks_pbip (Format: TMDL)
 Generates a complete metadata JSON file:
 
 ```bash
-python generate_json.py extract ./samples/adventureworks_pbip -o output_documentation.json --indent 2
+python generate_json.py extract "samples/AdventureWorks Sales" -o output_documentation.json --indent 2
 ```
 
 From a `model.bim` file:
@@ -371,11 +390,11 @@ python generate_json.py extract ./samples/retail_sales_bim/model.bim -o bim_docs
 
 ### 3. Markdown Document Generation (`docgen`)
 
-Generates a dedicated Markdown document for every table, measure, function, and expression:
+Generates a dedicated Markdown document for every table, measure, function, expression, and report visual page:
 
 ```bash
 # From a PBIP directory
-python generate_docs.py ./samples/adventureworks_pbip -o ./docs
+python generate_docs.py "samples/AdventureWorks Sales" -o ./docs
 
 # Or from an extracted JSON file
 python generate_docs.py ./output_documentation.json -o ./docs
@@ -384,7 +403,7 @@ python generate_docs.py ./output_documentation.json -o ./docs
 Generated directory structure:
 ```text
 docs/
-├── INDEX.md                     # Model catalog and overview
+├── AdventureWorks Sales.md      # Master catalog (<project_name>.md)
 ├── tables/
 │   ├── FactInternetSales.md     # Fact table document
 │   ├── DimCustomer.md           # Dimension document
@@ -395,9 +414,12 @@ docs/
 │       ├── Total_Sales.md       # Base measure (Depth 0)
 │       ├── Gross_Margin.md      # Composite measure (Depth 1)
 │       └── Margin.md            # Advanced measure (Depth 2)
-└── expressions/
-    ├── Staging_Orders.md        # Staging query document
-    └── StatusLookup.md          # Inline #table preview document
+├── expressions/
+│   ├── Staging_Orders.md        # Staging query document
+│   └── StatusLookup.md          # Inline #table preview document
+└── visuals/
+    ├── Overview.md              # Report page and visual context document
+    └── assets/                  # Scaled SVG canvas mini-maps
 ```
 
 ---

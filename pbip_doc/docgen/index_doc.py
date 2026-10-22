@@ -92,10 +92,11 @@ class IndexDocBuilder:
         if fn_section:
             sections.append(fn_section)
 
-        # 8. Expressions & Shared ETL Queries Catalog (if any expressions exist)
-        expr_section = self._build_expressions_catalog(expr_list)
-        if expr_section:
-            sections.append(expr_section)
+        # 8. Expressions & Shared ETL Queries Catalog (if any expressions exist and enabled)
+        if self.config.include_expression_docs:
+            expr_section = self._build_expressions_catalog(expr_list)
+            if expr_section:
+                sections.append(expr_section)
 
         return "\n\n".join(sections) + "\n"
 
@@ -172,10 +173,11 @@ class IndexDocBuilder:
             m_count = len([m for m in measures if m.get("table") == name])
             clean_tbl = sanitize_filename(name)
             if self.config.is_table_published(t):
+                tables_sub = self.config.tables_subdir.strip("/\\")
                 if self.config.base_doc_url:
-                    tbl_url = join_doc_path(self.config.base_doc_url, self.config.tables_subdir.strip("/\\"), f"{clean_tbl}.md")
+                    tbl_url = join_doc_path(self.config.base_doc_url, tables_sub, f"{clean_tbl}.md") if tables_sub else join_doc_path(self.config.base_doc_url, f"{clean_tbl}.md")
                 else:
-                    tbl_url = f"{self.config.tables_subdir}/{clean_tbl}.md"
+                    tbl_url = f"{tables_sub}/{clean_tbl}.md" if tables_sub else f"{clean_tbl}.md"
                 link = f"[`{name}`]({tbl_url})"
             else:
                 ext_url = self.config.resolve_external_table_url(t)
@@ -235,10 +237,11 @@ class IndexDocBuilder:
             clean_tbl = sanitize_filename(tbl)
             sanitized = sanitize_filename(m_name)
             if self.config.is_measure_published(m):
+                measures_sub = self.config.measures_subdir.strip("/\\")
                 if self.config.base_doc_url:
-                    meas_url = join_doc_path(self.config.base_doc_url, self.config.measures_subdir.strip("/\\"), clean_tbl, f"{sanitized}.md")
+                    meas_url = join_doc_path(self.config.base_doc_url, measures_sub, clean_tbl, f"{sanitized}.md") if measures_sub else join_doc_path(self.config.base_doc_url, clean_tbl, f"{sanitized}.md")
                 else:
-                    meas_url = f"{self.config.measures_subdir}/{clean_tbl}/{sanitized}.md"
+                    meas_url = f"{measures_sub}/{clean_tbl}/{sanitized}.md" if measures_sub else f"{clean_tbl}/{sanitized}.md"
                 link = f"[`[{m_name}]`]({meas_url})"
             else:
                 ext_url = self.config.resolve_external_measure_url(m, self.model.get("tables", []))
@@ -279,10 +282,11 @@ class IndexDocBuilder:
             sig = fn.get("parameters_signature") or "()"
             sanitized = sanitize_filename(fn_name)
             down_count = len(fn.get("downstream_measures", []))
+            functions_sub = self.config.functions_subdir.strip("/\\")
             if self.config.base_doc_url:
-                fn_url = join_doc_path(self.config.base_doc_url, self.config.functions_subdir.strip("/\\"), f"{sanitized}.md")
+                fn_url = join_doc_path(self.config.base_doc_url, functions_sub, f"{sanitized}.md") if functions_sub else join_doc_path(self.config.base_doc_url, f"{sanitized}.md")
             else:
-                fn_url = f"{self.config.functions_subdir}/{sanitized}.md"
+                fn_url = f"{functions_sub}/{sanitized}.md" if functions_sub else f"{sanitized}.md"
             link = f"[`{fn_name}`]({fn_url})"
             lines.append(f"| `{fn_name}` | `{ret_type}` | `{sig}` | {down_count} | {link} |")
 
@@ -306,7 +310,7 @@ class IndexDocBuilder:
         tables_sub = self.config.tables_subdir.strip("/\\")
 
         for expr in sorted(exprs, key=lambda e: e.get("query_name", "")):
-            name = expr.get("query_name", "Unnamed")
+            name = expr.get("query_name") or "expression"
             clean_name = sanitize_filename(name)
             is_inline = expr.get("is_inline_table", False)
             full_m = expr.get("full_m_expression", "")
@@ -414,7 +418,7 @@ class IndexDocBuilder:
             else:
                 p_url = f"{vis_sub}/{clean_p}.md" if vis_sub else f"{clean_p}.md"
 
-            p_link = f"[{p_name}]({p_url})" if self.config.include_markdown_links else f"`{p_name}`"
+            p_link = f"[{p_name}]({p_url})"
             status_str = "Hidden" if is_hidden else "Visible"
 
             # Gather top distinct metrics

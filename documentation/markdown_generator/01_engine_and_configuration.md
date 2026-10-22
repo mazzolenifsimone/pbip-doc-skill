@@ -91,7 +91,13 @@ A measure is evaluated for publication through the following conditions:
 - `measures_subdir` (default: `"measures"`): Subdirectory for measure pages.
 - `functions_subdir` (default: `"functions"`): Subdirectory for UDF function pages.
 - `expressions_subdir` (default: `"expressions"`): Subdirectory for expression pages.
-- `generate_index_file` (default: `true`): Generates `INDEX.md`.
+- `visuals_subdir` (default: `"visuals"`): Subdirectory for report visual pages.
+- `visual_assets_subdir` (default: `"assets"`): Subdirectory for scaled SVG canvas mini-maps.
+- `project_name` (default: `null`): Explicit PBIP project name override for frontmatter indexing and master catalog naming.
+- `generate_index_file` (default: `true`): Generates master catalog markdown file (defaults to `<project_name>.md`).
+- `index_filename` (default: `null`): Custom filename override for the master catalog (defaults to `<project_name>.md`).
+- `report_path` (default: `null`): Explicit path to associated `*.Report` directory or `report.json`.
+- `report_dataset_name` (default: `null`): Explicit remote/bound semantic model dataset name for visual table/measure links.
 - `sanitize_filenames` (default: `true`): Replaces characters invalid in filesystems (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) with underscores.
 - `include_markdown_links` (default: `true`): Enables cross-linking between measures, tables, and expressions.
 - `base_doc_url` (default: `null`): Base URL or absolute path for the documentation currently being generated (e.g. `https://docs.company.internal/bi/SalesModel` or `/mnt/docs/SalesModel`). When set, relative Markdown links are converted to absolute links.
@@ -119,6 +125,7 @@ Each document type provides modular section toggles:
 - **Measure Sections**: `include_measure_yaml_frontmatter`, `include_measure_dax_formula`, `include_measure_upstream_deps`, `include_measure_downstream_impact`, `include_measure_referenced_columns`, `include_measure_rag_hints`.
 - **Expression Sections**: `include_expression_docs`, `include_expression_yaml_frontmatter`, `include_expression_overview_section`, `include_expression_inline_table`, `include_expression_lineage_section`, `include_expression_steps_section`, `include_expression_m_code`, `include_expression_rag_hints`.
 - **Function Sections**: `include_function_yaml_frontmatter`, `include_function_parameters_section`, `include_function_formula_section`, `include_function_downstream_section`, `include_function_rag_hints`.
+- **Visual & Report Sections**: `include_visual_docs`, `include_visual_yaml_frontmatter`, `include_visual_svg_maps`.
 
 ---
 

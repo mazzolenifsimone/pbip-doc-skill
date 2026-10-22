@@ -84,6 +84,7 @@ class DocGenConfig:
     functions_subdir: str = "functions"
     expressions_subdir: str = "expressions"
     generate_index_file: bool = True
+    index_filename: Optional[str] = None  # Custom filename for the master catalog (defaults to <project_name>.md)
     sanitize_filenames: bool = True
     include_markdown_links: bool = True  # Cross-link measures to tables and vice-versa
 
@@ -646,12 +647,15 @@ class DocGenConfig:
             "visuals_subdir": "Subdirectory name for report page / visual documentation pages.",
             "visual_assets_subdir": "Subdirectory name for visual SVG mini-map assets (default: assets).",
             "report_path": "Path to associated *.Report directory (if not automatically discovered alongside the semantic model).",
+            "report_dataset_name": "Explicit remote/bound semantic model dataset name for report visual table/measure links.",
+            "project_name": "Explicit PBIP project name override for frontmatter indexing and master catalog naming.",
             "output_dir": "Target directory where documentation files are written.",
             "tables_subdir": "Subdirectory name for table documentation pages.",
             "measures_subdir": "Subdirectory name for measure documentation pages.",
             "functions_subdir": "Subdirectory name for DAX UDF function documentation pages.",
             "expressions_subdir": "Subdirectory name for shared query / expression documentation pages.",
-            "generate_index_file": "Generate master INDEX.md catalog.",
+            "generate_index_file": "Generate master catalog markdown file (defaults to <project_name>.md).",
+            "index_filename": "Custom filename override for the master catalog markdown file (defaults to <project_name>.md).",
             "sanitize_filenames": "Sanitize special characters in generated markdown filenames.",
             "include_markdown_links": "Render cross-links between measures and tables in generated markdown.",
             "base_doc_url": "Base URL or absolute path for the documentation currently being generated (e.g. web portal, intranet wiki, or documentation server root).",

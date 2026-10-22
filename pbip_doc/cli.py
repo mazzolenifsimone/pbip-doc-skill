@@ -410,8 +410,9 @@ def main():
             function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
             visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
             svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
+            index_doc = next((p for p in generated_docs if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
             print(f"[SUCCESS] Documentation successfully generated in '{config.output_dir}'!")
-            print(f" -> Index: {config.output_dir}/INDEX.md")
+            print(f" -> Index: {config.output_dir}/{index_doc}")
             print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({config.output_dir}/{config.tables_subdir}/)")
             print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({config.output_dir}/{config.measures_subdir}/)")
             if function_docs:

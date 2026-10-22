@@ -347,9 +347,10 @@ class PBIPMCPServer:
 
         generator = MarkdownDocGenerator(config=config)
         generated = generator.write_to_directory(path, out_dir)
+        index_doc = next((p for p in generated if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
         return (
             f"Successfully generated {len(generated)} Markdown documentation files in '{out_dir}/'.\n"
-            f"Master index available at: {out_dir}/INDEX.md"
+            f"Master index available at: {out_dir}/{index_doc}"
         )
 
     def _query_measure(self, args: Dict[str, Any]) -> Dict[str, Any]:

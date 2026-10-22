@@ -3,7 +3,7 @@
 Convenience entry point for generating modular Markdown documentation
 for tables and measures from PBIP models or JSON output.
 Usage:
-    python generate_docs.py ./samples/adventureworks_pbip -o ./docs
+    python generate_docs.py "samples/AdventureWorks Sales" -o ./docs
     python generate_docs.py ./semantic_model_docs.json -o ./docs
 """
 

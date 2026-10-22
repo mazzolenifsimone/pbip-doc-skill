@@ -37,7 +37,7 @@ tags: ["documentation", "portal", "index", "json_schema", "markdown_generator", 
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │          PHASE 2: Modular Markdown Generator           │
-│   (INDEX.md, tables/*.md, measures/*/*.md, RAG Hints)  │
+│  (<project_name>.md, tables/*.md, measures/*/*.md)     │
 │           [documentation/markdown_generator/]          │
 └────────────────────────────────────────────────────────┘
 ```
@@ -65,7 +65,7 @@ Located in [`documentation/json_schema/`](./json_schema/README.md):
 Located in [`documentation/markdown_generator/`](./markdown_generator/README.md):
 
 - [`01_engine_and_configuration.md`](./markdown_generator/01_engine_and_configuration.md): Orchestration engine and publishing filters.
-- [`02_index_catalog_page.md`](./markdown_generator/02_index_catalog_page.md): Master catalog (`INDEX.md`), KPI cards, and inventories.
+- [`02_index_catalog_page.md`](./markdown_generator/02_index_catalog_page.md): Master catalog (`<project_name>.md` / `INDEX.md`), KPI cards, and inventories.
 - [`03_table_pages.md`](./markdown_generator/03_table_pages.md): Table pages, data dictionaries, calculated columns, and snowflake joins.
 - [`04_measure_pages.md`](./markdown_generator/04_measure_pages.md): Measure pages, calculation depth, and downstream impact.
 - [`05_expression_and_query_pages.md`](./markdown_generator/05_expression_and_query_pages.md): Shared ETL queries, `#table` rendering, and staging lineage.

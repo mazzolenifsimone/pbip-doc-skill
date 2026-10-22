@@ -10,7 +10,7 @@ tags: ["docgen", "markdown", "rag", "documentation", "catalog", "power_bi"]
 
 > **TL;DR**:
 > - Phase 2 takes the semantic model (directly or from Phase 1 JSON) and generates modular, human-readable, and RAG-ready Markdown documentation.
-> - Produces a master catalog (`INDEX.md`) and dedicated, self-contained Markdown files for every table, DAX measure, User-Defined Function (UDF), and Power Query expression.
+> - Produces a master catalog (`<project_name>.md` / `INDEX.md`) and dedicated, self-contained Markdown files for every table, DAX measure, User-Defined Function (UDF), Power Query expression, and report page.
 > - Every file includes structured YAML frontmatter, enabling vector databases and AI agents to filter and search model metadata efficiently.
 > - Handles Power BI auto date table exclusion, inherited entities scoping, table role classification, DAX calculation depths, and `#table` inline data rendering.
 
@@ -22,7 +22,7 @@ When executed, the Markdown Generator builds a clean, structured directory tree 
 
 ```text
 docs/
-├── INDEX.md                               # Master catalog and global inventory
+├── <project_name>.md                      # Master catalog and global inventory (e.g. AdventureWorks.md)
 ├── tables/                                # Dedicated Markdown page per table
 │   ├── FactInternetSales.md
 │   ├── DimCustomer.md

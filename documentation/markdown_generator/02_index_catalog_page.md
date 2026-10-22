@@ -5,24 +5,26 @@ python_module: "pbip_doc.docgen.index_doc"
 tags: ["index", "catalog", "master_document", "inventory", "star_schema", "kpi_hierarchy"]
 ---
 
-# 02. Master Index Catalog (`INDEX.md`)
+# 02. Master Index Catalog (`<project_name>.md` / `INDEX.md`)
 
 > **TL;DR**:
-> - `INDEX.md` is the central catalog and entry point for the entire semantic model documentation.
+> - `<project_name>.md` (or `INDEX.md`) is the central catalog and entry point for the entire semantic model documentation.
+> - By default, the master file is dynamically named after the project (e.g. `AdventureWorks.md`), matching the `pbip_project` frontmatter tag. It can be overridden via `index_filename`.
 > - Contains high-level metadata (counts, compatibility level, culture) and structured YAML frontmatter.
 > - Groups tables by their architectural Star Schema role (Fact, Dimension, Snowflake Outrigger, Date, Bridge).
 > - Groups DAX measures by their calculation depth (Depth 0 base measures vs. higher-level KPIs).
-> - Lists detected physical data sources, shared Power Query ETL expressions, and custom DAX functions.
+> - Lists detected physical data sources, shared Power Query ETL expressions, custom DAX functions, and report presentation pages.
 
 ---
 
 ## 📋 Frontmatter Specification
 
-`INDEX.md` starts with catalog-level YAML frontmatter:
+The master catalog starts with catalog-level YAML frontmatter:
 
 ```yaml
 ---
 title: "Semantic Model Documentation: AdventureWorks"
+pbip_project: AdventureWorks
 doc_type: "semantic_model_catalog"
 format: "TMDL"
 tables_count: 12

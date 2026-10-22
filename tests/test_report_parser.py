@@ -1059,15 +1059,15 @@ class TestReportVisualDocgen(unittest.TestCase):
         gen = MarkdownDocGenerator(cfg)
         docs = gen.generate_all_documents(pbip_root)
 
-        self.assertIn("INDEX.md", docs)
+        self.assertIn("AdventureWorks.md", docs)
         self.assertIn("tables/Sales.md", docs)
         self.assertIn("measures/Sales/Cost.md", docs)
         self.assertIn("visuals/Overview.md", docs)
         self.assertIn("visuals/assets/Overview/v1.svg", docs)
-        self.assertIn("## Report Presentation & Visuals: `AdventureWorks`", docs["INDEX.md"])
+        self.assertIn("## Report Presentation & Visuals: `AdventureWorks`", docs["AdventureWorks.md"])
 
         # Check pbip_project frontmatter across all document types
-        self.assertIn("pbip_project: AdventureWorks", docs["INDEX.md"])
+        self.assertIn("pbip_project: AdventureWorks", docs["AdventureWorks.md"])
         self.assertIn("pbip_project: AdventureWorks", docs["tables/Sales.md"])
         self.assertIn("pbip_project: AdventureWorks", docs["measures/Sales/Cost.md"])
 
@@ -1084,10 +1084,10 @@ class TestReportVisualDocgen(unittest.TestCase):
         gen_novis = MarkdownDocGenerator(cfg_novis)
         docs_novis = gen_novis.generate_all_documents(pbip_root)
 
-        self.assertIn("INDEX.md", docs_novis)
+        self.assertIn("AdventureWorks.md", docs_novis)
         self.assertNotIn("visuals/Overview.md", docs_novis)
         self.assertNotIn("visuals/assets/Overview/v1.svg", docs_novis)
-        self.assertNotIn("## Report Presentation & Visuals", docs_novis["INDEX.md"])
+        self.assertNotIn("## Report Presentation & Visuals", docs_novis["AdventureWorks.md"])
 
     def test_visual_svg_map_specifications(self):
         """Tests that generated SVG mini-maps comply with dark gray, 80% transparency, and square corner specs."""
