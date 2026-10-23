@@ -8,10 +8,22 @@ import json
 import os
 import re
 from dataclasses import dataclass, field, asdict
+from pathlib import Path
 from typing import List, Set, Optional, Dict, Any, Tuple
 
 
 from .utils import sanitize_filename, join_doc_path
+
+
+# Standardized directory conventions for multi-artifact codebase portals (immutable standards)
+DEFAULT_MODELS_SUBDIR = "models"
+DEFAULT_REPORTS_SUBDIR = "reports"
+DEFAULT_TABLES_SUBDIR = "tables"
+DEFAULT_MEASURES_SUBDIR = "measures"
+DEFAULT_FUNCTIONS_SUBDIR = "functions"
+DEFAULT_EXPRESSIONS_SUBDIR = "expressions"
+DEFAULT_VISUALS_SUBDIR = "visuals"
+DEFAULT_ASSETS_SUBDIR = "assets"
 
 
 @dataclass
@@ -95,6 +107,79 @@ class DocGenConfig:
     base_doc_url: Optional[str] = None
     external_docs_base_url: Optional[str] = None
     external_doc_paths: Dict[str, str] = field(default_factory=dict)
+
+    # Scoped overrides per path, glob pattern, or artifact name: { "reports/executive/*": { "include_visual_svg_maps": false } }
+    overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+    def get_scoped_config(self, artifact_identifier: Union[str, Path]) -> "DocGenConfig":
+        """
+        Returns a clone of this config with any matching path or name overrides applied.
+        Matching is performed against:
+        1. Exact string match (e.g. 'Sales.Report' or 'models/Sales')
+        2. Glob pattern match (e.g. 'reports/executive/**' or '*.Report')
+        3. Local config file (.pbip_doc.json or pbip_doc.config.json) if artifact_identifier is a directory.
+        """
+        import copy
+        import fnmatch
+
+        cfg = copy.deepcopy(self)
+        target_str = str(artifact_identifier).replace("\\", "/")
+        target_name = Path(artifact_identifier).name if isinstance(artifact_identifier, (str, Path)) else ""
+
+        # 1. Apply matching overrides from self.overrides
+        for pattern, override_dict in self.overrides.items():
+            pattern_norm = pattern.replace("\\", "/")
+            if (
+                pattern_norm == target_str
+                or pattern_norm == target_name
+                or fnmatch.fnmatch(target_str, pattern_norm)
+                or fnmatch.fnmatch(target_name, pattern_norm)
+                or fnmatch.fnmatch(target_str, f"*/{pattern_norm}")
+            ):
+                if isinstance(override_dict, dict):
+                    for k, v in override_dict.items():
+                        if hasattr(cfg, k):
+                            current_val = getattr(cfg, k)
+                            setattr(cfg, k, self._coerce_value(current_val, v))
+
+        # 2. Check local config file if directory
+        if isinstance(artifact_identifier, (str, Path)):
+            p = Path(artifact_identifier)
+            if p.is_dir():
+                for local_cfg_name in (".pbip_doc.json", "pbip_doc.config.json"):
+                    local_cfg_file = p / local_cfg_name
+                    if local_cfg_file.is_file():
+                        try:
+                            with open(local_cfg_file, "r", encoding="utf-8") as f:
+                                local_data = json.load(f)
+                            if isinstance(local_data, dict):
+                                for k, v in local_data.items():
+                                    if hasattr(cfg, k):
+                                        current_val = getattr(cfg, k)
+                                        setattr(cfg, k, self._coerce_value(current_val, v))
+                        except Exception:
+                            pass
+
+        return cfg
+
+    def resolve_cross_artifact_measure_url(
+        self, target_model: str, table: str, measure_name: str, is_html: bool = False
+    ) -> str:
+        """Computes relative URL from a report visual doc to a semantic model measure doc."""
+        clean_model = sanitize_filename(target_model)
+        clean_tbl = sanitize_filename(table)
+        clean_m = sanitize_filename(measure_name)
+        ext = "html" if is_html else "md"
+        return f"../../{DEFAULT_MODELS_SUBDIR}/{clean_model}/{DEFAULT_MEASURES_SUBDIR}/{clean_tbl}/{clean_m}.{ext}"
+
+    def resolve_cross_artifact_table_url(
+        self, target_model: str, table: str, is_html: bool = False
+    ) -> str:
+        """Computes relative URL from a report visual doc to a semantic model table doc."""
+        clean_model = sanitize_filename(target_model)
+        clean_tbl = sanitize_filename(table)
+        ext = "html" if is_html else "md"
+        return f"../../{DEFAULT_MODELS_SUBDIR}/{clean_model}/{DEFAULT_TABLES_SUBDIR}/{clean_tbl}.{ext}"
 
     def resolve_measure_url_from_visual(self, table: str, measure_name: str) -> str:
         """Computes relative or absolute URL to a measure doc from a page visual doc."""

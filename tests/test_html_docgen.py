@@ -67,12 +67,7 @@ class TestHtmlAssets(unittest.TestCase):
 
     def test_js_asset(self):
         js = get_html_js()
-        self.assertIn("localStorage", js)
-        self.assertIn("theme-toggle-btn", js)
-        self.assertIn("sidebar-search-input", js)
-        self.assertIn("table-filter-input", js)
-        self.assertIn("initCopyButtons", js)
-        self.assertIn("clipboard", js)
+        self.assertEqual(js, "")
 
 
 class TestHtmlLayoutBuilder(unittest.TestCase):
@@ -109,9 +104,9 @@ class TestHtmlLayoutBuilder(unittest.TestCase):
         self.assertIn("<!DOCTYPE html>", page_html)
         self.assertIn("<title>Model Overview - Test Model Docs Documentation</title>", page_html)
         self.assertIn('href="./assets/style.css"', page_html)
-        self.assertIn('src="./assets/search_index.js"', page_html)
-        self.assertIn('src="./assets/app.js"', page_html)
-        self.assertIn('id="sidebar-search-input"', page_html)
+        self.assertNotIn('search_index.js', page_html)
+        self.assertNotIn('<script', page_html)
+        self.assertNotIn('assets/app.js', page_html)
         self.assertIn("Sales", page_html)
         self.assertIn("Total Sales", page_html)
         self.assertIn("<h1>Welcome</h1>", page_html)
@@ -124,8 +119,9 @@ class TestHtmlLayoutBuilder(unittest.TestCase):
             content_html="<div>Measure Details</div>",
         )
         self.assertIn('href="../../assets/style.css"', page_html)
-        self.assertIn('src="../../assets/search_index.js"', page_html)
-        self.assertIn('src="../../assets/app.js"', page_html)
+        self.assertNotIn('search_index.js', page_html)
+        self.assertNotIn('<script', page_html)
+        self.assertNotIn('assets/app.js', page_html)
         self.assertIn("Measure Details", page_html)
 
 
@@ -187,6 +183,8 @@ class TestHtmlBuilders(unittest.TestCase):
         content = builder.build_content()
         self.assertIn("Sales BI", content)
         self.assertIn("Published Data Model Tables", content)
+        self.assertIn('id="tab-desc"', content)
+        self.assertIn("Description", content)
         self.assertIn("Customer", content)
         self.assertIn("Sales", content)
         self.assertIn("Total Sales", content)
@@ -200,7 +198,13 @@ class TestHtmlBuilders(unittest.TestCase):
         self.assertIn("SalesAmount", content)
         self.assertIn("Total Sales", content)
         self.assertIn("Power Query (M) Script", content)
-        self.assertIn("copy-btn", content)
+        self.assertIn("page-quicknav", content)
+        self.assertIn('id="tab-desc"', content)
+        self.assertIn("Fact table for sales transactions.", content)
+        self.assertIn('id="tab-sources"', content)
+        self.assertIn("Data Sources Summary", content)
+        self.assertIn('<a href="#tab-sources">Data Sources</a>', content)
+        self.assertNotIn("copy-btn", content)
 
     def test_html_measure_builder(self):
         measure_data = self.sample_measure
@@ -208,7 +212,10 @@ class TestHtmlBuilders(unittest.TestCase):
         content = builder.build_content()
         self.assertIn("Total Sales", content)
         self.assertIn("Sales[SalesAmount]", content)
-        self.assertIn("copy-btn", content)
+        self.assertIn("page-quicknav", content)
+        self.assertIn('id="tab-desc"', content)
+        self.assertIn("Calculates gross sales revenue.", content)
+        self.assertNotIn("copy-btn", content)
 
     def test_html_visual_builder(self):
         v_bbox = BoundingBox(x=10, y=20, width=500, height=300, z=1)
@@ -261,6 +268,36 @@ class TestHtmlBuilders(unittest.TestCase):
         self.assertIn("Customer", content)
         self.assertIn("Name", content)
         self.assertIn("Locked Page Filters", content)
+        self.assertIn('id="tab-desc"', content)
+        self.assertIn("Description", content)
+
+    def test_html_expression_and_function_builders(self):
+        expr_data = {
+            "query_name": "SharedDimCustomer",
+            "is_staging": True,
+            "description": "Shared ETL query for customer entities.",
+            "direct_dependencies": [],
+            "full_m_expression": "let\n    Source = 1\nin\n    Source",
+        }
+        expr_builder = HtmlExpressionBuilder(expr_data, self.sample_model, self.config)
+        expr_content = expr_builder.build_content()
+        self.assertIn("SharedDimCustomer", expr_content)
+        self.assertIn('id="tab-desc"', expr_content)
+        self.assertIn("Shared ETL query for customer entities.", expr_content)
+
+        fn_data = {
+            "name": "CalcTax",
+            "return_type": "double",
+            "description": "Calculates tax based on rate.",
+            "parameters": [{"name": "amount", "data_type": "double"}],
+            "expression": "amount * 0.2",
+            "parameters_signature": "(amount: double)",
+        }
+        fn_builder = HtmlFunctionBuilder(fn_data, self.sample_model, self.config)
+        fn_content = fn_builder.build_content()
+        self.assertIn("CalcTax", fn_content)
+        self.assertIn('id="tab-desc"', fn_content)
+        self.assertIn("Calculates tax based on rate.", fn_content)
 
 
 class TestHtmlDocGeneratorEndToEnd(unittest.TestCase):
@@ -295,10 +332,10 @@ class TestHtmlDocGeneratorEndToEnd(unittest.TestCase):
         self.assertIn("AdventureWorks KB", index_content)
         self.assertIn("Model Overview", index_content)
 
-        # 2. Assets
+        # 2. Assets (Zero-JS: only style.css emitted)
         self.assertTrue((Path(self.temp_dir) / "assets" / "style.css").exists())
-        self.assertTrue((Path(self.temp_dir) / "assets" / "app.js").exists())
-        self.assertTrue((Path(self.temp_dir) / "assets" / "search_index.js").exists())
+        self.assertFalse((Path(self.temp_dir) / "assets" / "app.js").exists())
+        self.assertFalse((Path(self.temp_dir) / "assets" / "search_index.js").exists())
 
         # 3. Tables
         self.assertTrue((Path(self.temp_dir) / "tables" / "Sales.html").exists())
@@ -312,12 +349,104 @@ class TestHtmlDocGeneratorEndToEnd(unittest.TestCase):
         svg_maps = list((Path(self.temp_dir) / "visuals" / "assets" / "Overview").glob("*.svg"))
         self.assertGreater(len(svg_maps), 0)
 
-        # 6. Search Index content
-        with open(Path(self.temp_dir) / "assets" / "search_index.js", "r", encoding="utf-8") as f:
-            search_content = f.read()
-        self.assertIn("window.SEARCH_INDEX =", search_content)
-        self.assertIn("Orders", search_content)
-        self.assertIn("Sales", search_content)
+    def test_config_scoped_overrides(self):
+        cfg = DocGenConfig(
+            include_visual_svg_maps=True,
+            include_table_m_code=True,
+            overrides={
+                "reports/adhoc/*": {
+                    "include_visual_svg_maps": False,
+                },
+                "Special.Report": {
+                    "include_visual_svg_maps": False,
+                },
+                "models/HR": {
+                    "include_table_m_code": False,
+                }
+            }
+        )
+
+        # 1. Unmatched report uses defaults
+        c1 = cfg.get_scoped_config("reports/standard/Sales.Report")
+        self.assertTrue(c1.include_visual_svg_maps)
+        self.assertTrue(c1.include_table_m_code)
+
+        # 2. Matched glob pattern overrides setting
+        c2 = cfg.get_scoped_config("reports/adhoc/QuickTest.Report")
+        self.assertFalse(c2.include_visual_svg_maps)
+        self.assertTrue(c2.include_table_m_code)
+
+        # 3. Exact artifact name match
+        c3 = cfg.get_scoped_config("Special.Report")
+        self.assertFalse(c3.include_visual_svg_maps)
+
+        # 4. Model override
+        c4 = cfg.get_scoped_config("models/HR")
+        self.assertFalse(c4.include_table_m_code)
+        self.assertTrue(c4.include_visual_svg_maps)
+
+
+    def test_measure_table_name_collision_and_html_markdown_parity(self):
+        """Verifies that a measure named identically to its host table (e.g. Sales[Sales])
+        is retained, resolves correctly in DAX DAG (Profit = [Sales] - [Cost]),
+        and renders upstream dependencies and full DAX formula consistently in both Markdown and HTML."""
+        from pbip_doc.model_schema import PBIPSemanticModel, TableDefinition, MeasureDefinition, TableRole, TableRoleClassification
+        from pbip_doc.measure_analyzer import MeasureDependencyResolver
+        from pbip_doc.docgen.engine import MarkdownDocGenerator
+        from pbip_doc.docgen.html_engine import HtmlDocGenerator
+
+        tbl_sales = TableDefinition(
+            name="Sales",
+            role=TableRole.FACT,
+            classification_reasoning=TableRoleClassification(TableRole.FACT, 0.95),
+            columns=[],
+        )
+        m_sales = MeasureDefinition(name="Sales", table="Sales", dax_expression="SUM('Sales'[Sales Amount])")
+        m_cost = MeasureDefinition(name="Cost", table="Sales", dax_expression="SUM('Sales'[Total Product Cost])")
+        m_profit = MeasureDefinition(name="Profit", table="Sales", dax_expression="[Sales] - [Cost]")
+
+        measures = [m_sales, m_cost, m_profit]
+        resolver = MeasureDependencyResolver(measures, [tbl_sales])
+        resolver.analyze()
+
+        self.assertIn("Sales", m_profit.direct_measure_dependencies)
+        self.assertIn("Cost", m_profit.direct_measure_dependencies)
+        self.assertEqual(m_profit.direct_measure_dependencies, ["Cost", "Sales"])
+        self.assertIn("Profit", m_sales.downstream_measures)
+
+        model = PBIPSemanticModel(
+            model_name="AW_Sales",
+            source_format="TMDL",
+            compatibility_level=1600,
+            culture="en-US",
+            tables=[tbl_sales],
+            relationships=[],
+            measures=measures,
+            measure_dependency_dag={m.name: m.direct_measure_dependencies for m in measures},
+        )
+        model_dict = model.to_dict()
+
+        # Markdown Verification
+        cfg = DocGenConfig()
+        md_gen = MarkdownDocGenerator(cfg)
+        md_docs = md_gen.generate_all_documents(model_dict)
+        profit_md = md_docs["measures/Sales/Profit.md"]
+        self.assertIn("- [Cost](../Sales/Cost.md)", profit_md)
+        self.assertIn("- [Sales](../Sales/Sales.md)", profit_md)
+        self.assertIn("[Profit] =", profit_md)
+        self.assertIn("[Sales] - [Cost]", profit_md)
+
+        # HTML Verification
+        html_gen = HtmlDocGenerator(cfg)
+        html_docs = html_gen.generate_all_documents(model_dict)
+        profit_html = html_docs["measures/Sales/Profit.html"]
+        self.assertIn("[Cost]", profit_html)
+        self.assertIn("[Sales]", profit_html)
+        self.assertIn("measures/Sales/Cost.html", profit_html)
+        self.assertIn("measures/Sales/Sales.html", profit_html)
+        self.assertIn("Preceding Measures in DAG (Upstream - 2)", profit_html)
+        self.assertIn("2 Upstream Precedents", profit_html)
+        self.assertIn("[Profit] =\n[Sales] - [Cost]", profit_html)
 
 
 if __name__ == "__main__":

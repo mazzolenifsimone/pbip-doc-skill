@@ -39,10 +39,21 @@ class MeasureDocBuilder:
         self.all_upstream = measure_data.get("all_upstream_measures", [])
         self.downstream = measure_data.get("downstream_measures", [])
         self.referenced_functions = measure_data.get("referenced_functions", [])
-        self.referenced_cols = [
-            rc for rc in measure_data.get("referenced_columns", [])
-            if not self.config.is_table_excluded(rc.get("table", ""))
-        ]
+        norm_cols = []
+        for rc in measure_data.get("referenced_columns", []):
+            if isinstance(rc, dict):
+                t_name = rc.get("table", self.table)
+                c_name = rc.get("column", "")
+            elif isinstance(rc, (list, tuple)) and len(rc) >= 2:
+                t_name, c_name = str(rc[0]), str(rc[1])
+            elif isinstance(rc, str) and "[" in rc:
+                t_name, c_name = rc.split("[", 1)
+                c_name = c_name.rstrip("]")
+            else:
+                t_name, c_name = self.table, str(rc)
+            if not self.config.is_table_excluded(t_name):
+                norm_cols.append({"table": t_name, "column": c_name})
+        self.referenced_cols = norm_cols
         self.referenced_tables = [
             t for t in measure_data.get("referenced_tables", [])
             if not self.config.is_table_excluded(t)
@@ -133,6 +144,7 @@ class MeasureDocBuilder:
             "is_inherited": self.measure.get("is_inherited", False),
             "is_external_measure": self.measure.get("is_external_measure", False),
             "out_of_scope": self.measure.get("out_of_scope", False),
+            "description": self.description,
             "format_string": self.format_string or "Standard",
             "direct_dependencies": self.direct_deps,
             "all_upstream_dependencies": self.all_upstream,
@@ -185,12 +197,15 @@ class MeasureDocBuilder:
 
         lines.extend([
             "",
-            "## Business Description & Purpose",
+            "## Description",
+            "",
         ])
 
         if self.description:
             lines.append(f"> {self.description}")
-            lines.append("")
+        else:
+            lines.append("*No description provided.*")
+        lines.append("")
 
         if self.measure.get("is_inherited") or self.measure.get("is_external_measure"):
             ext_url = self.config.resolve_external_measure_url(self.measure, self.model.get("tables", []))

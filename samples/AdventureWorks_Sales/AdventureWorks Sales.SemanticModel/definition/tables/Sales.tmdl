@@ -116,12 +116,11 @@ table Sales
 		displayFolder: Core
 		lineageTag: 916e3a72-2e05-4374-b671-f663ce481b03
 
-	measure MeasureTitleTest =
+	/// Title Test Measure, used in TestPage
+	measure MeasureTestTitle =
 			SWITCH(TRUE(),
-			HASONEVALUE('Sales Territory'[Group]), "Sales by " & SELECTEDVALUE('Sales Territory'[Group]),
-			"All Regions Sales"
-			)
-		lineageTag: 5fa54954-1862-4520-a85d-dc6092367d1c
+			    ISFILTERED('Sales Territory'[Group]), "Sales by " & CONCATENATEX(SUMMARIZECOLUMNS('Sales Territory'[Group]), 'Sales Territory'[Group],  ", "), "All Group Region Sales")
+		lineageTag: 174bab21-7d24-42d6-8e3d-23996c2f277f
 
 		annotation PBI_FormatHint = {"isGeneralNumber":true}
 
@@ -300,7 +299,7 @@ table Sales
 		mode: import
 		source =
 				let
-				    Source = Excel.Workbook(File.Contents("C:\Users\jterh\OneDrive - Microsoft\_Corp Era\Power BI\AW2020 Sample\Sales\AdventureWorks_Sales.xlsx"), null, true),
+				    Source = Excel.Workbook(File.Contents("C:\Users\jterh\OneDrive - Microsoft\_Corp Era\Power BI\AW2020 Sample\Sales\AdventureWorks Sales.xlsx"), null, true),
 				    Sales_Table = Source{[Item="Sales",Kind="Table"]}[Data],
 				    #"Changed Type" = Table.TransformColumnTypes(Sales_Table,{{"SalesOrderLineKey", Int64.Type}, {"ResellerKey", Int64.Type}, {"CustomerKey", Int64.Type}, {"ProductKey", Int64.Type}, {"OrderDateKey", Int64.Type}, {"DueDateKey", Int64.Type}, {"ShipDateKey", Int64.Type}, {"SalesTerritoryKey", Int64.Type}, {"Order Quantity", Int64.Type}, {"Unit Price", type number}, {"Extended Amount", type number}, {"Unit Price Discount Pct", Int64.Type}, {"Product Standard Cost", type number}, {"Total Product Cost", type number}, {"Sales Amount", type number}})
 				in

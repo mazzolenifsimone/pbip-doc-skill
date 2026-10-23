@@ -166,7 +166,7 @@ class MeasureDependencyResolver:
 
         # Pattern 1: Explicit table and bracket: 'Table Name'[ColumnOrMeasure] or TableName[ColumnOrMeasure]
         table_bracket_pattern = re.compile(
-            r"(?:'([^']+)'|([a-zA-Z_][a-zA-Z0-9_\s]*))\s*\[([^\]]+)\]"
+            r"(?:'([^']+)'|([a-zA-Z_][a-zA-Z0-9_]*))\s*\[([^\]]+)\]"
         )
 
         # We will keep track of character spans matched by pattern 1 to avoid double-matching naked brackets

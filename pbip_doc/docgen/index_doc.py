@@ -108,9 +108,16 @@ class IndexDocBuilder:
             f"**Compatibility Level**: `{self.model.get('compatibility_level', 1600)}` | "
             f"**Culture**: `{self.model.get('culture', 'en-US')}`",
             "",
-            "Technical documentation for the PBIP semantic model. "
-            "Every table, DAX measure, User-Defined Function, and ETL expression features a dedicated Markdown document complete with structured YAML frontmatter for search, retrieval, and technical reference.",
+            "## Description",
+            "",
         ]
+        if self.model.get("description"):
+            lines.append(f"> {self.model['description']}")
+            lines.append("")
+        lines.append(
+            f"Technical documentation and data dictionary catalog for semantic model **`{self.model.get('model_name')}`**. "
+            "Every table, DAX measure, User-Defined Function, and ETL expression features a dedicated Markdown document complete with structured YAML frontmatter for search, retrieval, and technical reference."
+        )
         return "\n".join(lines)
 
     def _build_sources_section(self) -> str:

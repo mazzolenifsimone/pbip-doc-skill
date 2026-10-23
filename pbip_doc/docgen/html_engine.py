@@ -21,7 +21,7 @@ from .html_builders import (
     HtmlExpressionBuilder,
     HtmlFunctionBuilder,
 )
-from .html_assets import STYLE_CSS, APP_JS
+from .html_assets import STYLE_CSS
 from .visual_doc import PageVisualDocBuilder
 from .utils import sanitize_filename, clean_project_name
 from ..report_parser import ReportParser
@@ -37,18 +37,20 @@ class HtmlDocGenerator:
     def __init__(self, config: Optional[DocGenConfig] = None):
         self.config = config or DocGenConfig()
 
-    def generate_all_documents(self, model_data: Union[Dict[str, Any], str, Path]) -> Dict[str, str]:
+    def generate_all_documents(
+        self,
+        model_data: Union[Dict[str, Any], str, Path],
+        layout_override: Optional[Any] = None,
+        base_prefix: str = "",
+    ) -> Dict[str, str]:
         """
         Generates in-memory dictionary of all HTML documents and static assets:
         {
           "index.html": content,
           "assets/style.css": content,
-          "assets/app.js": content,
-          "assets/search_index.js": content,
           "tables/FactInternetSales.html": content,
           "measures/Sales/Total_Sales.html": content,
-          "visuals/Overview.html": content,
-          "visuals/assets/...": svg_content,
+          ...
         }
         """
         data = self._load_model_dict(model_data)
@@ -57,37 +59,34 @@ class HtmlDocGenerator:
         data["project_name"] = project_name
         documents: Dict[str, str] = {}
 
-        # 1. Static Assets (CSS and JS)
-        documents["assets/style.css"] = STYLE_CSS
-        documents["assets/app.js"] = APP_JS
+        # 1. Static Assets (CSS only - 100% Zero-JS) - only if standalone root
+        if not layout_override:
+            documents["assets/style.css"] = STYLE_CSS
 
         # Layout wrapper
-        layout = HtmlLayoutBuilder(
+        layout = layout_override or HtmlLayoutBuilder(
             project_name=project_name,
             data=data,
             config=self.config,
             report_model=report_model,
         )
 
-        search_items = []
+        bp = f"{base_prefix.strip('/')}/" if base_prefix.strip('/') else ""
 
         # 2. Master Catalog (index.html)
         if self.config.generate_index_file:
             idx_builder = HtmlIndexBuilder(data, self.config, report_model=report_model, project_name=project_name)
             idx_content = idx_builder.build_content()
+            doc_path = f"{bp}index.html"
+            rel_root = get_relative_root(doc_path)
+            breadcrumbs = [("Workspace", f"{rel_root}/index.html"), (project_name, None)] if base_prefix else [("Home", None)]
             idx_html = layout.wrap_page(
-                current_path="index.html",
+                current_path=doc_path,
                 page_title="Model Overview",
-                breadcrumbs=[("Home", None)],
+                breadcrumbs=breadcrumbs,
                 content_html=idx_content,
             )
-            documents["index.html"] = idx_html
-            search_items.append({
-                "title": "Model Overview",
-                "type": "Home",
-                "url": "index.html",
-                "desc": f"Project {project_name} catalog and summary."
-            })
+            documents[doc_path] = idx_html
 
         # 3. Table Documents (tables/<Table>.html)
         tables_sub = self.config.tables_subdir.strip("/\\")
@@ -98,24 +97,28 @@ class HtmlDocGenerator:
             clean_tbl_name = sanitize_filename(tbl_name)
             tbl_builder = HtmlTableBuilder(table, data, self.config, project_name=project_name)
             tbl_filename = f"{clean_tbl_name}.html"
-            doc_path = f"{tables_sub}/{tbl_filename}" if tables_sub else tbl_filename
+            rel_doc = f"{tables_sub}/{tbl_filename}" if tables_sub else tbl_filename
+            doc_path = f"{bp}{rel_doc}"
             rel_root = get_relative_root(doc_path)
 
             tbl_content = tbl_builder.build_content()
+            if base_prefix:
+                breadcrumbs = [
+                    ("Workspace", f"{rel_root}/index.html"),
+                    (project_name, f"{rel_root}/{base_prefix}/index.html"),
+                    ("Tables", None),
+                    (tbl_name, None),
+                ]
+            else:
+                breadcrumbs = [("Home", f"{rel_root}/index.html"), ("Tables", None), (tbl_name, None)]
+
             tbl_html = layout.wrap_page(
                 current_path=doc_path,
                 page_title=f"Table: {tbl_name}",
-                breadcrumbs=[("Home", f"{rel_root}/index.html"), ("Tables", None), (tbl_name, None)],
+                breadcrumbs=breadcrumbs,
                 content_html=tbl_content,
             )
             documents[doc_path] = tbl_html
-            search_items.append({
-                "title": tbl_name,
-                "type": "Table",
-                "role": table.get("role", "DIM"),
-                "url": doc_path,
-                "desc": f"Table with {len(table.get('columns', []))} columns."
-            })
 
         # 4. Measure Documents (measures/<Table>/<Measure>.html)
         measures_sub = self.config.measures_subdir.strip("/\\")
@@ -129,32 +132,37 @@ class HtmlDocGenerator:
             meas_builder = HtmlMeasureBuilder(measure, data, self.config, project_name=project_name)
             meas_filename = f"{clean_name}.html"
             if measures_sub:
-                doc_path = f"{measures_sub}/{clean_tbl_name}/{meas_filename}"
+                rel_doc = f"{measures_sub}/{clean_tbl_name}/{meas_filename}"
             else:
-                doc_path = f"{clean_tbl_name}/{meas_filename}"
+                rel_doc = f"{clean_tbl_name}/{meas_filename}"
+            doc_path = f"{bp}{rel_doc}"
             rel_root = get_relative_root(doc_path)
 
             meas_content = meas_builder.build_content()
-            tbl_doc_url = f"{rel_root}/{tables_sub}/{clean_tbl_name}.html" if tables_sub else f"{rel_root}/{clean_tbl_name}.html"
-            meas_html = layout.wrap_page(
-                current_path=doc_path,
-                page_title=f"Measure: [{meas_name}]",
-                breadcrumbs=[
+            tbl_doc_url = f"{rel_root}/{bp}{tables_sub}/{clean_tbl_name}.html" if tables_sub else f"{rel_root}/{bp}{clean_tbl_name}.html"
+            if base_prefix:
+                breadcrumbs = [
+                    ("Workspace", f"{rel_root}/index.html"),
+                    (project_name, f"{rel_root}/{base_prefix}/index.html"),
+                    ("Measures", None),
+                    (meas_tbl, tbl_doc_url),
+                    (meas_name, None),
+                ]
+            else:
+                breadcrumbs = [
                     ("Home", f"{rel_root}/index.html"),
                     ("Measures", None),
                     (meas_tbl, tbl_doc_url),
                     (meas_name, None),
-                ],
+                ]
+
+            meas_html = layout.wrap_page(
+                current_path=doc_path,
+                page_title=f"Measure: [{meas_name}]",
+                breadcrumbs=breadcrumbs,
                 content_html=meas_content,
             )
             documents[doc_path] = meas_html
-            search_items.append({
-                "title": meas_name,
-                "type": "Measure",
-                "table": meas_tbl,
-                "url": doc_path,
-                "desc": f"DAX measure in table {meas_tbl} (Depth {measure.get('calculation_depth', 0)})."
-            })
 
         # 5. Functions Documents (functions/<Function>.html)
         functions_sub = self.config.functions_subdir.strip("/\\")
@@ -163,23 +171,28 @@ class HtmlDocGenerator:
             clean_name = sanitize_filename(fn_name)
             fn_builder = HtmlFunctionBuilder(fn, data, self.config, project_name=project_name)
             fn_filename = f"{clean_name}.html"
-            doc_path = f"{functions_sub}/{fn_filename}" if functions_sub else fn_filename
+            rel_doc = f"{functions_sub}/{fn_filename}" if functions_sub else fn_filename
+            doc_path = f"{bp}{rel_doc}"
             rel_root = get_relative_root(doc_path)
 
             fn_content = fn_builder.build_content()
+            if base_prefix:
+                breadcrumbs = [
+                    ("Workspace", f"{rel_root}/index.html"),
+                    (project_name, f"{rel_root}/{base_prefix}/index.html"),
+                    ("Functions", None),
+                    (fn_name, None),
+                ]
+            else:
+                breadcrumbs = [("Home", f"{rel_root}/index.html"), ("Functions", None), (fn_name, None)]
+
             fn_html = layout.wrap_page(
                 current_path=doc_path,
                 page_title=f"Function: {fn_name}",
-                breadcrumbs=[("Home", f"{rel_root}/index.html"), ("Functions", None), (fn_name, None)],
+                breadcrumbs=breadcrumbs,
                 content_html=fn_content,
             )
             documents[doc_path] = fn_html
-            search_items.append({
-                "title": fn_name,
-                "type": "Function",
-                "url": doc_path,
-                "desc": "User-Defined DAX Function."
-            })
 
         # 6. Expressions Documents (expressions/<Expression>.html)
         if self.config.include_expression_docs:
@@ -190,23 +203,28 @@ class HtmlDocGenerator:
                 clean_name = sanitize_filename(q_name)
                 expr_builder = HtmlExpressionBuilder(expr, data, self.config, project_name=project_name)
                 expr_filename = f"{clean_name}.html"
-                doc_path = f"{expressions_sub}/{expr_filename}" if expressions_sub else expr_filename
+                rel_doc = f"{expressions_sub}/{expr_filename}" if expressions_sub else expr_filename
+                doc_path = f"{bp}{rel_doc}"
                 rel_root = get_relative_root(doc_path)
 
                 expr_content = expr_builder.build_content()
+                if base_prefix:
+                    breadcrumbs = [
+                        ("Workspace", f"{rel_root}/index.html"),
+                        (project_name, f"{rel_root}/{base_prefix}/index.html"),
+                        ("Expressions", None),
+                        (q_name, None),
+                    ]
+                else:
+                    breadcrumbs = [("Home", f"{rel_root}/index.html"), ("Expressions", None), (q_name, None)]
+
                 expr_html = layout.wrap_page(
                     current_path=doc_path,
                     page_title=f"Expression: {q_name}",
-                    breadcrumbs=[("Home", f"{rel_root}/index.html"), ("Expressions", None), (q_name, None)],
+                    breadcrumbs=breadcrumbs,
                     content_html=expr_content,
                 )
                 documents[doc_path] = expr_html
-                search_items.append({
-                    "title": q_name,
-                    "type": "Expression",
-                    "url": doc_path,
-                    "desc": "Shared Power Query M expression."
-                })
 
         # 7. Report & Visual Pages (visuals/<Page>.html)
         if self.config.include_visual_docs and report_model:
@@ -214,7 +232,8 @@ class HtmlDocGenerator:
             for page in report_model.pages:
                 clean_page_name = sanitize_filename(page.display_name)
                 page_filename = f"{clean_page_name}.html"
-                doc_path = f"{visuals_sub}/{page_filename}" if visuals_sub else page_filename
+                rel_doc = f"{visuals_sub}/{page_filename}" if visuals_sub else page_filename
+                doc_path = f"{bp}{rel_doc}"
                 rel_root = get_relative_root(doc_path)
 
                 vis_builder = HtmlVisualBuilder(
@@ -226,19 +245,23 @@ class HtmlDocGenerator:
                     model_measures=data.get("measures", []),
                 )
                 vis_content = vis_builder.build_content()
+                if base_prefix:
+                    breadcrumbs = [
+                        ("Workspace", f"{rel_root}/index.html"),
+                        (project_name, f"{rel_root}/{base_prefix}/index.html"),
+                        ("Report Pages", None),
+                        (page.display_name, None),
+                    ]
+                else:
+                    breadcrumbs = [("Home", f"{rel_root}/index.html"), ("Report Pages", None), (page.display_name, None)]
+
                 vis_html = layout.wrap_page(
                     current_path=doc_path,
                     page_title=f"Report Page: {page.display_name}",
-                    breadcrumbs=[("Home", f"{rel_root}/index.html"), ("Report Pages", None), (page.display_name, None)],
+                    breadcrumbs=breadcrumbs,
                     content_html=vis_content,
                 )
                 documents[doc_path] = vis_html
-                search_items.append({
-                    "title": page.display_name,
-                    "type": "ReportPage",
-                    "url": doc_path,
-                    "desc": f"Report dashboard page #{page.page_number} ({page.width}x{page.height})."
-                })
 
                 # Scaled SVG canvas mini-maps (reusing PageVisualDocBuilder SVG generator)
                 if self.config.include_visual_svg_maps:
@@ -252,9 +275,6 @@ class HtmlDocGenerator:
                     for asset_rel_path, svg_content in svg_assets.items():
                         asset_doc_path = f"{visuals_sub}/{asset_rel_path}" if visuals_sub else asset_rel_path
                         documents[asset_doc_path] = svg_content
-
-        # 8. Search Index JavaScript (file:// protocol safe)
-        documents["assets/search_index.js"] = f"window.SEARCH_INDEX = {json.dumps(search_items, indent=2)};\n"
 
         return documents
 

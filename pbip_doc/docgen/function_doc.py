@@ -120,12 +120,15 @@ class FunctionDocBuilder:
             "",
             f"**Signature**: {sig_display} | **Return Type**: `{self.return_type}` | **Downstream Dependent Measures**: `{len(self.downstream_measures)}`",
             "",
-            "## Business Description & Purpose",
+            "## Description",
+            "",
         ]
 
         if self.description:
             lines.append(f"> {self.description}")
-            lines.append("")
+        else:
+            lines.append("*No description provided.*")
+        lines.append("")
 
         lines.append(
             f"The User-Defined Function (UDF) **`{self.name}`** provides encapsulated, reusable DAX calculation logic "

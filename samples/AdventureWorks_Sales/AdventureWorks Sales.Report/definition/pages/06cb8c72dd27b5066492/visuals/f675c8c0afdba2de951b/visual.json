@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
-  "name": "99edbc5432d96f605392",
+  "name": "f675c8c0afdba2de951b",
   "position": {
-    "x": 1007.707910750507,
-    "y": 110.99391480730223,
-    "z": 1,
-    "height": 863.61054766734276,
-    "width": 804.21906693711969,
-    "tabOrder": 1
+    "x": 113.91480730223124,
+    "y": 89.57403651115618,
+    "z": 0,
+    "height": 834.40162271805275,
+    "width": 846.08519269776878,
+    "tabOrder": 0
   },
   "visual": {
     "visualType": "clusteredBarChart",
@@ -23,13 +23,27 @@
                       "Entity": "Sales Territory"
                     }
                   },
+                  "Property": "Group"
+                }
+              },
+              "queryRef": "Sales Territory.Group",
+              "nativeQueryRef": "Group",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Sales Territory"
+                    }
+                  },
                   "Property": "Region"
                 }
               },
               "queryRef": "Sales Territory.Region",
-              "nativeQueryRef": "TestRegion",
-              "active": true,
-              "displayName": "TestRegion"
+              "nativeQueryRef": "Region",
+              "active": false
             }
           ]
         },
@@ -47,8 +61,7 @@
                 }
               },
               "queryRef": "Sales.Sales",
-              "nativeQueryRef": "TestSales",
-              "displayName": "TestSales"
+              "nativeQueryRef": "Sales"
             }
           ]
         }
@@ -57,19 +70,18 @@
         "sort": [
           {
             "field": {
-              "Measure": {
+              "Column": {
                 "Expression": {
                   "SourceRef": {
-                    "Entity": "Sales"
+                    "Entity": "Sales Territory"
                   }
                 },
-                "Property": "Sales"
+                "Property": "Group"
               }
             },
             "direction": "Descending"
           }
-        ],
-        "isDefaultSort": true
+        ]
       }
     },
     "objects": {
@@ -173,13 +185,8 @@
           "properties": {
             "text": {
               "expr": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "Sales"
-                    }
-                  },
-                  "Property": "MeasureTitleTest"
+                "Literal": {
+                  "Value": "'All Group Sales'"
                 }
               }
             }

@@ -199,6 +199,8 @@ class PageVisualDocBuilder:
             f"**Canvas Size**: `{self.page.width}x{self.page.height}` | "
             f"**Visibility**: `{vis_status}`",
             "",
+            "## Description",
+            "",
             f"This technical document specifies the presentation and evaluation context for page **`{self.page.display_name}`**. "
             f"It details the exact filter perimeter (locked panel constraints, interactive defaults, and canvas slicers) "
             f"and provides spatial-to-metric mappings for **{len(dynamic_visuals)}** dynamic visual elements.",

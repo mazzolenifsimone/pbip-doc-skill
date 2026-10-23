@@ -11,7 +11,7 @@ annotation PBI_QueryOrder = ["Customer","Date","Product","Reseller","Sales","Sal
 
 annotation __PBI_TimeIntelligenceEnabled = 0
 
-annotation PBI_ProTooling = ["MCP-PBIModeling","DevMode"]
+annotation PBI_ProTooling = ["MCP-PBIModeling","DevMode","TMDLView_Desktop"]
 
 ref table Customer
 ref table Date

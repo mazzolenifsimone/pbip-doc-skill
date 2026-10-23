@@ -18,7 +18,8 @@ from .parser import PBIPParser
 from .m_lineage import MLineageResolver
 from .star_schema import StarSchemaResolver
 from .measure_analyzer import MeasureDependencyResolver
-from .docgen import DocGenConfig, MarkdownDocGenerator
+from .docgen import DocGenConfig, MarkdownDocGenerator, HtmlDocGenerator, WorkspaceDocGenerator
+from .codebase_scanner import CodebaseScanner, WorkspaceScanResult
 from .dax_formatter import format_dax, strip_dax_comments
 from .m_formatter import format_m, strip_m_comments
 
@@ -39,6 +40,10 @@ __all__ = [
     "MeasureDependencyResolver",
     "DocGenConfig",
     "MarkdownDocGenerator",
+    "HtmlDocGenerator",
+    "WorkspaceDocGenerator",
+    "CodebaseScanner",
+    "WorkspaceScanResult",
     "format_dax",
     "strip_dax_comments",
     "format_m",

@@ -210,6 +210,8 @@ class MarkdownDocGenerator:
 
     def _load_model_dict(self, model_input: Union[Dict[str, Any], str, Path]) -> Dict[str, Any]:
         """Ensures input is converted to standard dictionary."""
+        if hasattr(model_input, "to_dict"):
+            return model_input.to_dict()
         if isinstance(model_input, dict):
             return model_input
         

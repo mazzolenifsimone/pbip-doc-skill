@@ -86,8 +86,6 @@ class HtmlLayoutBuilder:
         """
         rel_root = get_relative_root(current_path)
         css_url = f"{rel_root}/assets/style.css"
-        js_url = f"{rel_root}/assets/app.js"
-        search_js_url = f"{rel_root}/assets/search_index.js"
         index_url = f"{rel_root}/index.html"
 
         sidebar_html = self._build_sidebar(current_path, rel_root)
@@ -97,7 +95,7 @@ class HtmlLayoutBuilder:
         escaped_project = html.escape(self.config.html_title or self.project_name)
 
         return f"""<!DOCTYPE html>
-<html lang="en" data-theme="auto">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -118,15 +116,6 @@ class HtmlLayoutBuilder:
           <span class="sidebar-badge">Docs</span>
         </a>
       </div>
-      <div class="sidebar-search-container">
-        <div class="search-input-wrapper">
-          <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="sidebar-search-input" class="search-input" placeholder="Search knowledge base..." autocomplete="off">
-        </div>
-      </div>
       <nav class="sidebar-nav">
 {sidebar_html}
       </nav>
@@ -137,22 +126,6 @@ class HtmlLayoutBuilder:
         <div class="breadcrumbs">
 {breadcrumbs_html}
         </div>
-        <div class="topbar-actions">
-          <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme">
-            <svg class="theme-toggle-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="5"></circle>
-              <line x1="12" y1="1" x2="12" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="23"></line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-              <line x1="1" y1="12" x2="3" y2="12"></line>
-              <line x1="21" y1="12" x2="23" y2="12"></line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-            <span id="theme-label">Theme</span>
-          </button>
-        </div>
       </header>
 
       <main class="wiki-article">
@@ -160,9 +133,6 @@ class HtmlLayoutBuilder:
       </main>
     </div>
   </div>
-
-  <script src="{search_js_url}"></script>
-  <script src="{js_url}"></script>
 </body>
 </html>
 """
@@ -245,15 +215,14 @@ class HtmlLayoutBuilder:
             for tbl, m_list in sorted(measures_by_table.items()):
                 clean_tbl = sanitize_filename(tbl)
                 is_current_table = current_path.startswith(f"{self.config.measures_subdir.strip('/\\\\')}/{clean_tbl}/")
-                expanded_style = "" if is_current_table else " style=\"display: none;\""
-                icon = "▾" if is_current_table else "▸"
+                open_attr = " open" if is_current_table else ""
 
                 lines.append(f"""            <li class="nav-subgroup">
-              <div class="nav-subgroup-header">
-                <span>{html.escape(tbl)} ({len(m_list)})</span>
-                <span class="subgroup-icon">{icon}</span>
-              </div>
-              <ul class="nav-list nav-subgroup-items"{expanded_style}>""")
+              <details class="nav-details"{open_attr}>
+                <summary class="nav-subgroup-header">
+                  <span>{html.escape(tbl)} ({len(m_list)})</span>
+                </summary>
+                <ul class="nav-list nav-subgroup-items">""")
 
                 for m in sorted(m_list, key=lambda x: x.get("name", "")):
                     m_name = m.get("name", "Measure")
@@ -265,7 +234,7 @@ class HtmlLayoutBuilder:
                     <span>{html.escape(m_name)}</span>
                   </a>
                 </li>""")
-                lines.append("              </ul>\n            </li>")
+                lines.append("                </ul>\n              </details>\n            </li>")
 
             lines.append("          </ul>\n        </div>")
 

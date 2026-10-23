@@ -112,6 +112,107 @@ STYLE_CSS = """/* pbip-doc-skill - Enterprise BI Documentation Stylesheet */
   --radius-lg: 8px;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Executive Neutral Dark Gray Palette */
+    --bg-body: #16181d;
+    --bg-surface: #21252d;
+    --bg-surface-hover: #2b313b;
+    --bg-sidebar: #181a1f;
+    --bg-sidebar-hover: #22262e;
+    --bg-sidebar-active: #2b313b;
+    --bg-sidebar-input: #121418;
+    --bg-sidebar-badge: rgba(255, 255, 255, 0.08);
+
+    /* Code Cells Dark Mode (Adaptive) */
+    --bg-code: #14161a;
+    --bg-code-header: #1b1e24;
+    --border-code: #2d333b;
+    --text-code: #e2e8f0;
+    --text-code-muted: #8b949e;
+    --bg-copy-btn: rgba(255, 255, 255, 0.08);
+    --border-copy-btn: rgba(255, 255, 255, 0.15);
+    --text-copy-btn: #e2e8f0;
+    --bg-copy-btn-hover: rgba(255, 255, 255, 0.16);
+
+    /* Global Scrollbars Dark Mode */
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #343a46;
+    --scrollbar-thumb-hover: #4b5563;
+    
+    --text-main: #d0d7de;
+    --text-muted: #8b949e;
+    --text-sidebar: #9da7b3;
+    --text-sidebar-bright: #f0f3f6;
+    
+    --border-color: #343a46;
+    --border-subtle: #272c35;
+    --border-sidebar: #272c35;
+    
+    --primary: #d0d7de;
+    --primary-hover: #f0f3f6;
+    --accent: #60a5fa;
+    --accent-hover: #93c5fd;
+
+    --link-color: #60a5fa;
+    --link-hover: #93c5fd;
+
+    /* Role Badges Dark Mode */
+    --role-fact-bg: rgba(30, 64, 175, 0.2);
+    --role-fact-text: #93c5fd;
+    --role-fact-border: rgba(147, 197, 253, 0.3);
+
+    --role-dim-bg: rgba(22, 101, 52, 0.2);
+    --role-dim-text: #86efac;
+    --role-dim-border: rgba(134, 239, 172, 0.3);
+
+    --role-snow-bg: rgba(133, 77, 14, 0.2);
+    --role-snow-text: #fde047;
+    --role-snow-border: rgba(253, 224, 71, 0.3);
+
+    --role-bridge-bg: rgba(107, 33, 168, 0.2);
+    --role-bridge-text: #d8b4fe;
+    --role-bridge-border: rgba(216, 180, 254, 0.3);
+
+    --role-date-bg: rgba(3, 105, 161, 0.2);
+    --role-date-text: #7dd3fc;
+    --role-date-border: rgba(125, 211, 252, 0.3);
+
+    --role-calcgroup-bg: rgba(55, 48, 163, 0.2);
+    --role-calcgroup-text: #a5b4fc;
+    --role-calcgroup-border: rgba(165, 180, 252, 0.3);
+
+    --role-utility-bg: rgba(63, 63, 70, 0.25);
+    --role-utility-text: #d4d4d8;
+    --role-utility-border: rgba(212, 212, 216, 0.2);
+
+    --col-imported-bg: rgba(71, 85, 105, 0.2);
+    --col-imported-text: #cbd5e1;
+    --col-imported-border: rgba(203, 213, 225, 0.2);
+
+    --col-calc-bg: rgba(3, 105, 161, 0.25);
+    --col-calc-text: #7dd3fc;
+    --col-calc-border: rgba(125, 211, 252, 0.3);
+
+    --col-key-bg: rgba(146, 64, 14, 0.25);
+    --col-key-text: #fde68a;
+    --col-key-border: rgba(252, 211, 77, 0.3);
+
+    /* Semantic Status & Neutral Badges Dark Mode */
+    --badge-neutral-bg: rgba(255, 255, 255, 0.08);
+    --badge-neutral-text: #9da7b3;
+    --badge-neutral-border: rgba(255, 255, 255, 0.12);
+
+    --status-active-bg: rgba(22, 101, 52, 0.25);
+    --status-active-text: #86efac;
+    --status-active-border: rgba(134, 239, 172, 0.3);
+
+    --status-inactive-bg: rgba(180, 83, 9, 0.25);
+    --status-inactive-text: #fde047;
+    --status-inactive-border: rgba(253, 224, 71, 0.3);
+  }
+}
+
 [data-theme="dark"] {
   /* Executive Neutral Dark Gray Palette */
   --bg-body: #16181d;
@@ -619,48 +720,101 @@ a:hover, a:focus {
   margin-top: 0.25rem;
 }
 
-/* Modern Tab Navigation */
-.tabs-container {
-  margin-top: 1.5rem;
-}
-
-.tabs-header {
+/* Zero-JS In-Page Quick Navigation & Clean Vertical Sections */
+.page-quicknav {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 1.25rem;
-  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-top: 1.25rem;
+  margin-bottom: 1.75rem;
 }
 
-.tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0.65rem 1rem;
+.page-quicknav a {
   font-size: 0.85rem;
   font-weight: 500;
+  color: var(--link-color);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.page-quicknav a:hover {
+  background-color: var(--bg-surface-hover);
+  text-decoration: underline;
+}
+
+.page-quicknav-sep {
   color: var(--text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
+  font-size: 0.75rem;
+  user-select: none;
 }
 
-.tab-btn:hover {
-  color: var(--text-main);
+.content-section {
+  margin-bottom: 2.25rem;
+  scroll-margin-top: 1.5rem;
 }
 
-.tab-btn.active {
-  color: var(--text-main);
+.section-title {
+  font-size: 1.2rem;
   font-weight: 600;
-  border-bottom-color: var(--text-main);
+  color: var(--text-main);
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
+/* Ensure all content containers are visible in Zero-JS mode */
 .tab-content {
+  display: block !important;
+  margin-bottom: 1.5rem;
+}
+
+/* Native HTML5 Details/Summary in Sidebar & Collapsible Sections */
+details.nav-details {
+  width: 100%;
+}
+
+details.nav-details summary.nav-subgroup-header {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+details.nav-details summary::-webkit-details-marker {
   display: none;
 }
 
-.tab-content.active {
-  display: block;
+details.nav-details summary::after {
+  content: "▸";
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+details.nav-details[open] summary::after {
+  content: "▾";
+}
+
+/* Target highlighting for anchor navigation */
+:target {
+  scroll-margin-top: 2rem;
+}
+
+.calc-col-card:target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 /* Content Cards & Sections */
@@ -680,6 +834,22 @@ a:hover, a:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.description-card {
+  border-left: 4px solid var(--accent);
+}
+
+.description-text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.description-empty {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* Calculated Column Card & Deep-Link Highlighting */
@@ -1076,266 +1246,10 @@ a:hover, a:focus {
 }
 """
 
-APP_JS = """// pbip-doc-skill - Enterprise Wiki Client Application
-(function() {
-  'use strict';
-
-  // 1. Theme Management (System preference + LocalStorage persistence)
-  function initTheme() {
-    let savedTheme = 'auto';
-    try {
-      savedTheme = localStorage.getItem('pbip_wiki_theme') || 'auto';
-    } catch (e) {
-      // Graceful fallback if localStorage is blocked by sandboxed iframe / security policy
-    }
-    applyTheme(savedTheme);
-
-    const btn = document.getElementById('theme-toggle-btn');
-    if (btn) {
-      btn.addEventListener('click', function() {
-        const current = document.documentElement.getAttribute('data-theme') || 'auto';
-        let next = 'dark';
-        if (current === 'dark') next = 'light';
-        else if (current === 'light') next = 'auto';
-        
-        try {
-          localStorage.setItem('pbip_wiki_theme', next);
-        } catch (e) {}
-        applyTheme(next);
-      });
-    }
-  }
-
-  function applyTheme(theme) {
-    let effective = theme;
-    if (theme === 'auto') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      effective = prefersDark ? 'dark' : 'light';
-    }
-    document.documentElement.setAttribute('data-theme', effective);
-    
-    const label = document.getElementById('theme-label');
-    if (label) {
-      label.textContent = effective === 'dark' ? 'Dark' : 'Light';
-    }
-  }
-
-  // 2. Tab Navigation with Deep-Linking Support
-  function initTabs() {
-    const tabHeaders = document.querySelectorAll('.tabs-header');
-    tabHeaders.forEach(header => {
-      const buttons = header.querySelectorAll('.tab-btn');
-      buttons.forEach(btn => {
-        btn.addEventListener('click', function() {
-          const targetId = this.getAttribute('data-tab-target');
-          if (targetId) {
-            switchTab(header, targetId);
-          }
-        });
-      });
-    });
-
-    // Delegated click for deep-linking badges/links to specific tabs (.link-to-tab)
-    document.addEventListener('click', function(e) {
-      const link = e.target.closest('.link-to-tab');
-      if (link) {
-        const targetTab = link.getAttribute('data-tab');
-        const hash = link.getAttribute('href');
-        if (targetTab) {
-          const tabBtn = document.querySelector(`.tab-btn[data-tab-target="${targetTab}"]`);
-          if (tabBtn) {
-            const container = tabBtn.closest('.tabs-container');
-            const header = container ? container.querySelector('.tabs-header') : null;
-            if (header) {
-              switchTab(header, targetTab);
-            }
-          }
-        }
-        if (hash && hash.startsWith('#')) {
-          setTimeout(function() {
-            scrollToTarget(hash);
-          }, 50);
-        }
-      }
-    });
-
-    // Check URL hash on page load
-    if (window.location.hash) {
-      handleUrlHash(window.location.hash);
-    }
-  }
-
-  function switchTab(header, targetId) {
-    const buttons = header.querySelectorAll('.tab-btn');
-    const container = header.closest('.tabs-container') || header.parentElement;
-    const contents = container.querySelectorAll('.tab-content');
-
-    buttons.forEach(b => b.classList.remove('active'));
-    contents.forEach(c => c.classList.remove('active'));
-
-    const activeBtn = header.querySelector(`[data-tab-target="${targetId}"]`);
-    const activeContent = document.getElementById(targetId);
-
-    if (activeBtn) activeBtn.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
-  }
-
-  function handleUrlHash(hash) {
-    if (!hash || !hash.startsWith('#')) return;
-    const targetEl = document.querySelector(hash);
-    if (!targetEl) return;
-
-    // Check if target element is inside a tab-content
-    const parentTab = targetEl.closest('.tab-content');
-    if (parentTab) {
-      const tabId = parentTab.id;
-      const tabBtn = document.querySelector(`.tab-btn[data-tab-target="${tabId}"]`);
-      if (tabBtn) {
-        const header = tabBtn.closest('.tabs-header');
-        if (header) {
-          switchTab(header, tabId);
-        }
-      }
-    }
-    setTimeout(function() {
-      scrollToTarget(hash);
-    }, 100);
-  }
-
-  function scrollToTarget(hash) {
-    const el = document.querySelector(hash);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('highlight-pulse');
-      setTimeout(function() {
-        el.classList.remove('highlight-pulse');
-      }, 2000);
-    }
-  }
-
-  // 3. Live Table Search Filter
-  function initTableFilters() {
-    const inputs = document.querySelectorAll('.table-filter-input');
-    inputs.forEach(input => {
-      input.addEventListener('input', function() {
-        const targetTableId = this.getAttribute('data-target-table');
-        const query = this.value.toLowerCase().trim();
-        const table = document.getElementById(targetTableId);
-        if (!table) return;
-
-        const rows = table.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-          const text = row.textContent.toLowerCase();
-          row.style.display = text.includes(query) ? '' : 'none';
-        });
-      });
-    });
-  }
-
-  // 4. One-Click Copy to Clipboard (Universal Clipboard API + execCommand Fallback)
-  function initCopyButtons() {
-    const copyBtns = document.querySelectorAll('.copy-btn');
-    copyBtns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        const targetId = this.getAttribute('data-copy-target');
-        const targetEl = document.getElementById(targetId);
-        if (!targetEl) return;
-        const textToCopy = targetEl.textContent;
-
-        function markSuccess() {
-          const originalText = btn.textContent;
-          btn.textContent = 'Copied!';
-          btn.style.background = 'rgba(34, 197, 94, 0.2)';
-          setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.background = '';
-          }, 1500);
-        }
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(textToCopy).then(markSuccess).catch(() => {
-            fallbackCopy(textToCopy, markSuccess);
-          });
-        } else {
-          fallbackCopy(textToCopy, markSuccess);
-        }
-      });
-    });
-  }
-
-  function fallbackCopy(text, onSuccess) {
-    try {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-9999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      if (onSuccess) onSuccess();
-    } catch (err) {}
-  }
-
-  // 5. Sidebar Navigation Live Filter
-  function initSidebarSearch() {
-    const input = document.getElementById('sidebar-search-input');
-    if (!input) return;
-
-    input.addEventListener('input', function() {
-      const query = this.value.toLowerCase().trim();
-      const navItems = document.querySelectorAll('.wiki-sidebar .nav-item');
-      
-      navItems.forEach(item => {
-        const text = item.textContent.toLowerCase();
-        const matches = text.includes(query);
-        item.style.display = matches ? '' : 'none';
-      });
-
-      // Show/hide subheaders depending on children visibility
-      const subGroups = document.querySelectorAll('.wiki-sidebar .nav-subgroup');
-      subGroups.forEach(group => {
-        const visibleChildren = group.querySelectorAll('.nav-item:not([style*="display: none"])');
-        group.style.display = visibleChildren.length > 0 ? '' : 'none';
-        const items = group.querySelector('.nav-subgroup-items');
-        if (items && query.length > 0) {
-          items.style.display = '';
-        }
-      });
-    });
-  }
-
-  // 6. Accordion toggle for Measure Host Tables in Sidebar
-  function initAccordions() {
-    const headers = document.querySelectorAll('.nav-subgroup-header');
-    headers.forEach(h => {
-      h.addEventListener('click', function() {
-        const container = this.closest('.nav-subgroup');
-        const items = container.querySelector('.nav-subgroup-items');
-        if (items) {
-          const isHidden = items.style.display === 'none';
-          items.style.display = isHidden ? '' : 'none';
-          const icon = this.querySelector('.subgroup-icon');
-          if (icon) {
-            icon.textContent = isHidden ? '▾' : '▸';
-          }
-        }
-      });
-    });
-  }
-
-  // Boot all client-side modules
-  document.addEventListener('DOMContentLoaded', function() {
-    initTheme();
-    initTabs();
-    initTableFilters();
-    initCopyButtons();
-    initSidebarSearch();
-    initAccordions();
-  });
-})();
-"""
+# Zero-JS Policy: PBIP HTML documentation is 100% pure HTML5 and CSS.
+# No JavaScript files or script tags are emitted or executed, ensuring full compliance
+# with strict enterprise SharePoint Modern sandboxes, air-gapped intranets, and CSP policies.
+APP_JS = ""
 
 
 def get_html_css() -> str:
@@ -1344,5 +1258,9 @@ def get_html_css() -> str:
 
 
 def get_html_js() -> str:
-    """Returns the client-side JavaScript for the HTML documentation portal."""
+    """
+    Returns the client-side JavaScript for the HTML documentation portal.
+    In Zero-JS mode, this always returns an empty string as no JavaScript is used.
+    """
     return APP_JS
+

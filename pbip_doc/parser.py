@@ -54,6 +54,26 @@ def _clean_tmdl_description(desc: Optional[str]) -> Optional[str]:
     return d if d else None
 
 
+def _extract_tmdl_doc_comment(text: Optional[str]) -> Optional[str]:
+    """Extracts and joins TMDL /// documentation comments from preceding lines."""
+    if not text:
+        return None
+    doc_lines = []
+    has_any = False
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("///"):
+            has_any = True
+            c = s[3:]
+            if c.startswith(" "):
+                c = c[1:]
+            doc_lines.append(c)
+    if not has_any:
+        return None
+    res = "\n".join(doc_lines).strip()
+    return res if res else None
+
+
 class PBIPParser:
     """
     Parses a PBIP semantic model from either a directory (TMDL/BIM) or a single BIM file.
@@ -498,55 +518,91 @@ class PBIPParser:
 
     def _parse_tmdl_expressions(self, content: str, raw_queries: Dict[str, Dict[str, Any]], default_name: Optional[str] = None):
         """Extracts shared queries from expressions.tmdl or definition/expressions/*.tmdl."""
-        expr_blocks = re.split(r'^\s*expression\s+', content, flags=re.MULTILINE)
-        for block in expr_blocks:
-            if not block.strip():
-                continue
-            lines = block.splitlines()
-            header = lines[0].strip()
-            # Name extraction
-            name_match = re.match(r"^(['\"]?)([^'=]+)\1\s*=\s*(.*)$", header)
-            if name_match:
-                q_name = name_match.group(2).strip()
-                first_line_expr = name_match.group(3)
-                rest_of_code = "\n".join(lines[1:])
-                combined_code = (first_line_expr + "\n" + rest_of_code).strip()
-            elif default_name and "=" in header:
-                parts = header.split("=", 1)
-                q_name = default_name
-                combined_code = (parts[1] + "\n" + "\n".join(lines[1:])).strip()
-            else:
-                continue
+        expr_pattern = re.compile(
+            r'(?P<doc>(?:^[^\S\r\n]*///[^\r\n]*\r?\n\s*)*)'
+            r'^[^\S\r\n]*expression\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))\s*=\s*'
+            r'(?P<body>.*?)'
+            r'(?=^[^\S\r\n]*///|^[^\S\r\n]*expression\b|\Z)',
+            re.MULTILINE | re.DOTALL,
+        )
+        matches = list(expr_pattern.finditer(content))
+        if matches:
+            for match in matches:
+                q_name = (match.group("qname") or match.group("uname") or "").strip()
+                body = match.group("body")
+                e_doc = _extract_tmdl_doc_comment(match.group("doc"))
 
-            # Extract properties before cleaning them
-            desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', block)
-            if desc_m:
-                description = desc_m.group("mdesc").strip()
-            else:
-                desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', block, re.MULTILINE)
-                description = desc_match.group(1).strip() if desc_match else None
-            description = _clean_tmdl_description(description)
+                desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', body)
+                if desc_m:
+                    description = desc_m.group("mdesc").strip()
+                else:
+                    desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
+                    description = desc_match.group(1).strip() if desc_match else None
+                description = _clean_tmdl_description(description) or e_doc
 
-            tag_match = re.search(r'lineageTag:\s*([^\r\n]+)', block)
-            lineage_tag = tag_match.group(1).strip() if tag_match else None
+                tag_match = re.search(r'lineageTag:\s*([^\r\n]+)', body)
+                lineage_tag = tag_match.group(1).strip() if tag_match else None
 
-            group_match = re.search(r'queryGroup:\s*([^\r\n]+)', block)
-            query_group = group_match.group(1).strip() if group_match else None
+                group_match = re.search(r'queryGroup:\s*([^\r\n]+)', body)
+                query_group = group_match.group(1).strip() if group_match else None
 
-            # Clean lineageTag, queryGroup, description, annotation at end of block
-            m_code = re.split(r'\n\s*(?:lineageTag|queryGroup|description|annotation)\b', combined_code)[0].strip()
+                # Clean lineageTag, queryGroup, description, annotation at end of block
+                m_code = re.split(r'\n\s*(?:lineageTag|queryGroup|description|annotation)\b', body)[0].strip()
+                m_code = _clean_tmdl_multiline_block(m_code) or ""
 
-            # Clean triple backticks if used in TMDL M expressions
-            m_code = _clean_tmdl_multiline_block(m_code) or ""
+                raw_queries[q_name] = {
+                    "m_code": m_code.strip(),
+                    "target_table": None,
+                    "is_staging": True,
+                    "description": description,
+                    "lineage_tag": lineage_tag,
+                    "query_group": query_group,
+                }
+        else:
+            expr_blocks = re.split(r'^\s*expression\s+', content, flags=re.MULTILINE)
+            for block in expr_blocks:
+                if not block.strip():
+                    continue
+                lines = block.splitlines()
+                header = lines[0].strip()
+                name_match = re.match(r"^(['\"]?)([^'=]+)\1\s*=\s*(.*)$", header)
+                if name_match:
+                    q_name = name_match.group(2).strip()
+                    first_line_expr = name_match.group(3)
+                    rest_of_code = "\n".join(lines[1:])
+                    combined_code = (first_line_expr + "\n" + rest_of_code).strip()
+                elif default_name and "=" in header:
+                    parts = header.split("=", 1)
+                    q_name = default_name
+                    combined_code = (parts[1] + "\n" + "\n".join(lines[1:])).strip()
+                else:
+                    continue
 
-            raw_queries[q_name] = {
-                "m_code": m_code.strip(),
-                "target_table": None,
-                "is_staging": True,
-                "description": description,
-                "lineage_tag": lineage_tag,
-                "query_group": query_group,
-            }
+                desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', block)
+                if desc_m:
+                    description = desc_m.group("mdesc").strip()
+                else:
+                    desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', block, re.MULTILINE)
+                    description = desc_match.group(1).strip() if desc_match else None
+                description = _clean_tmdl_description(description)
+
+                tag_match = re.search(r'lineageTag:\s*([^\r\n]+)', block)
+                lineage_tag = tag_match.group(1).strip() if tag_match else None
+
+                group_match = re.search(r'queryGroup:\s*([^\r\n]+)', block)
+                query_group = group_match.group(1).strip() if group_match else None
+
+                m_code = re.split(r'\n\s*(?:lineageTag|queryGroup|description|annotation)\b', combined_code)[0].strip()
+                m_code = _clean_tmdl_multiline_block(m_code) or ""
+
+                raw_queries[q_name] = {
+                    "m_code": m_code.strip(),
+                    "target_table": None,
+                    "is_staging": True,
+                    "description": description,
+                    "lineage_tag": lineage_tag,
+                    "query_group": query_group,
+                }
 
     def _parse_single_table_tmdl(self, content: str, default_name: str) -> Tuple[TableDefinition, List[MeasureDefinition], str]:
         """Parses a table .tmdl file into columns, measures, and M code."""
@@ -558,25 +614,34 @@ class PBIPParser:
         table_expression = None
 
         # Check table header (handles regular: table TableName, quoted: table 'Table Name', and calculated: table TableName = <DAX>)
-        first_line = lines[0].strip() if lines else ""
-        t_match = re.match(r"^table\s+(?:(['\"])(.*?)\1|([^\s=]+))(?:\s*=\s*(.*))?$", first_line)
-        if t_match:
-            table_name = (t_match.group(2) or t_match.group(3) or "").strip()
-            if t_match.group(4) is not None:
+        table_match = re.search(
+            r'(?P<doc>(?:^[^\S\r\n]*///[^\r\n]*\r?\n\s*)*)^[^\S\r\n]*table\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))(?:\s*=\s*(?P<expr>[^\r\n]*))?',
+            content,
+            re.MULTILINE
+        )
+        table_doc = None
+        if table_match:
+            table_name = (table_match.group("qname") or table_match.group("uname") or "").strip() or default_name
+            table_doc = _extract_tmdl_doc_comment(table_match.group("doc"))
+            if table_match.group("expr") is not None:
                 source_type = "CalculatedTable"
-                header_expr = t_match.group(4).strip()
+                header_expr = table_match.group("expr").strip()
                 if header_expr:
                     table_expression = _clean_tmdl_multiline_block(header_expr)
 
-        # Extract table-level description (before any column, measure, partition, hierarchy)
-        table_header_block = re.split(r'\n\s{1,4}(?:column|measure|partition|hierarchy)\b', content, maxsplit=1)[0]
+        # Extract table-level description (before any child column, measure, partition, hierarchy, calculationGroup, or child doc comment)
+        table_header_block = re.split(
+            r'\n[^\S\r\n]*(?:(?:///)|(?:column|measure|partition|hierarchy|calculationGroup|calculationItem)\b)',
+            content,
+            maxsplit=1
+        )[0]
         tbl_desc_m = re.search(r'description:\s*```(?P<mdesc>[\s\S]*?)```', table_header_block)
         if tbl_desc_m:
             description = tbl_desc_m.group("mdesc").strip()
         else:
             tbl_desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', table_header_block, re.MULTILINE)
             description = tbl_desc_match.group(1).strip() if tbl_desc_match else None
-        description = _clean_tmdl_description(description)
+        description = _clean_tmdl_description(description) or table_doc
 
         columns: List[ColumnDefinition] = []
         measures: List[MeasureDefinition] = []
@@ -588,13 +653,13 @@ class PBIPParser:
         inherited_expression_source = None
 
         entity_partition_match = re.search(
-            r'partition\s+.*?\s*=\s*entity\b(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\s*\Z)',
+            r'partition\s+.*?\s*=\s*entity\b(?P<body>.*?)(?=^[^\S\r\n]*///|^[^\S\r\n]+(?:column|measure|partition|hierarchy|calculationGroup|calculationItem)|\s*\Z)',
             content,
             re.DOTALL | re.IGNORECASE | re.MULTILINE
         )
         m_partition_match = re.search(r'partition\s+.*?\s*=\s*m\b.*?source\s*=\s*(.*)', content, re.DOTALL | re.IGNORECASE)
         calc_partition_match = re.search(
-            r'partition\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))?\s*=\s*calculated\b(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition|hierarchy)|\s*\Z)',
+            r'partition\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))?\s*=\s*calculated\b(?P<body>.*?)(?=^[^\S\r\n]*///|^[^\S\r\n]+(?:column|measure|partition|hierarchy|calculationGroup|calculationItem)|\s*\Z)',
             content,
             re.DOTALL | re.IGNORECASE | re.MULTILINE
         )
@@ -609,8 +674,8 @@ class PBIPParser:
             inherited_expression_source = exp_m.group(1).strip().strip("'\"") if exp_m else None
         elif m_partition_match:
             table_m_code = m_partition_match.group(1).strip()
-            # Stop before annotations or next major block
-            table_m_code = re.split(r'\n\s*(?:annotation|lineageTag)\b', table_m_code)[0]
+            # Stop before annotations, next major block, or doc comments
+            table_m_code = re.split(r'\n\s*(?:annotation|lineageTag|column|measure|partition|hierarchy|calculationGroup)\b|\n\s*///', table_m_code)[0]
             table_m_code = _clean_tmdl_multiline_block(table_m_code) or ""
             source_type = "PowerQuery"
         elif calc_partition_match or re.search(r'partition\b.*=\s*calculated\b', content, re.IGNORECASE):
@@ -637,7 +702,9 @@ class PBIPParser:
         #   column ColumnName =
         #       <Multiline DAX Expression>
         col_pattern = re.compile(
-            r'^\s{1,4}column\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))(?:\s*=\s*(?P<inline_expr>[^\r\n]*))?(?P<body>.*?)(?=^\s{1,4}(?:column|measure|partition)|\Z)',
+            r'(?P<doc>(?:^[^\S\r\n]*///[^\r\n]*\r?\n\s*)*)'
+            r'^[^\S\r\n]+column\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))(?:\s*=\s*(?P<inline_expr>[^\r\n]*))?(?P<body>.*?)'
+            r'(?=^[^\S\r\n]*///|^[^\S\r\n]+(?:column|measure|partition|hierarchy|calculationGroup|calculationItem)\b|\Z)',
             re.MULTILINE | re.DOTALL,
         )
         for match in col_pattern.finditer(content):
@@ -647,6 +714,7 @@ class PBIPParser:
 
             inline_expr = match.group("inline_expr")
             body = match.group("body") or ""
+            col_doc = _extract_tmdl_doc_comment(match.group("doc"))
 
             is_calculated = False
             c_expr = None
@@ -678,7 +746,7 @@ class PBIPParser:
             else:
                 desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', body, re.MULTILINE)
                 c_desc = desc_match.group(1).strip() if desc_match else None
-            c_desc = _clean_tmdl_description(c_desc)
+            c_desc = _clean_tmdl_description(c_desc) or col_doc
 
             # Fallback for explicit expression: attribute if present
             if not c_expr:
@@ -702,12 +770,15 @@ class PBIPParser:
 
         # Extract Measures
         measure_pattern = re.compile(
-            r"^\s{1,4}measure\s+(['\"]?)(.*?)\1\s*=\s*(.*?)(?=^\s{1,4}(?:measure|column|partition)|\Z)",
+            r'(?P<doc>(?:^[^\S\r\n]*///[^\r\n]*\r?\n\s*)*)'
+            r'^[^\S\r\n]+measure\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))\s*=\s*(?P<expr_and_props>.*?)'
+            r'(?=^[^\S\r\n]*///|^[^\S\r\n]+(?:measure|column|partition|hierarchy|calculationGroup|calculationItem)\b|\Z)',
             re.MULTILINE | re.DOTALL,
         )
         for match in measure_pattern.finditer(content):
-            m_name = match.group(2).strip()
-            m_body_and_props = match.group(3)
+            m_name = (match.group("qname") or match.group("uname") or "").strip()
+            m_body_and_props = match.group("expr_and_props")
+            m_doc = _extract_tmdl_doc_comment(match.group("doc"))
 
             # Separate DAX expression from TMDL property attributes (lineageTag, formatString, etc.)
             prop_split = re.split(r'\n\s{2,8}(?:lineageTag|formatString|displayFolder|description|annotation):', m_body_and_props, maxsplit=1)
@@ -722,7 +793,7 @@ class PBIPParser:
             else:
                 desc_match = re.search(r'description:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
                 m_desc = desc_match.group(1).strip() if desc_match else None
-            m_desc = _clean_tmdl_description(m_desc)
+            m_desc = _clean_tmdl_description(m_desc) or m_doc
             folder_match = re.search(r'displayFolder:\s*["\']?(.*?)["\']?$', m_body_and_props, re.MULTILINE)
             m_folder = folder_match.group(1).strip() if folder_match else None
             m_hidden = "isHidden" in m_body_and_props
@@ -923,17 +994,18 @@ class PBIPParser:
     def _parse_tmdl_functions(self, content: str) -> List[FunctionDefinition]:
         """Parses DAX User-Defined Functions from functions.tmdl."""
         functions: List[FunctionDefinition] = []
-        matches = list(re.finditer(r'^\s{0,2}function\s+([^\r\n=]+)\s*=', content, re.MULTILINE | re.IGNORECASE))
+        matches = list(re.finditer(
+            r'(?P<doc>(?:^[^\S\r\n]*///[^\r\n]*\r?\n\s*)*)^[^\S\r\n]*function\s+(?:(?P<q>[\'"])(?P<qname>.*?)(?P=q)|(?P<uname>[^\s=]+))\s*=',
+            content,
+            re.MULTILINE | re.IGNORECASE
+        ))
         if not matches:
             return functions
 
         for i, match in enumerate(matches):
-            raw_name = match.group(1).strip()
-            # Clean quotes: 'Safe Divide' -> Safe Divide
-            if (raw_name.startswith("'") and raw_name.endswith("'")) or (raw_name.startswith('"') and raw_name.endswith('"')):
-                fn_name = raw_name[1:-1].strip()
-            else:
-                fn_name = raw_name
+            raw_name = (match.group("qname") or match.group("uname") or "").strip()
+            fn_doc = _extract_tmdl_doc_comment(match.group("doc"))
+            fn_name = raw_name
 
             start_body = match.end()
             end_body = matches[i + 1].start() if i + 1 < len(matches) else len(content)
@@ -982,6 +1054,7 @@ class PBIPParser:
                 if dm:
                     raw_desc = dm.group(1) or dm.group(2) or dm.group(3)
                     description = _clean_tmdl_description(raw_desc)
+            description = description or fn_doc
 
             type_match = re.search(r'^\s{0,8}dataType:\s*([^\r\n]+)', meta_block, re.MULTILINE)
             return_type = type_match.group(1).strip() if type_match else None
@@ -1350,8 +1423,8 @@ class PBIPParser:
         known_table_names = {t.name for t in tables}
         valid_measures = []
         for m in measures:
-            if m.name in known_table_names and (not m.table or m.table == m.name):
-                # Erroneous table entry placed in measures
+            if not m.table and m.name in known_table_names:
+                # Erroneous table entry placed in measures without host table
                 continue
             valid_measures.append(m)
         measures = valid_measures

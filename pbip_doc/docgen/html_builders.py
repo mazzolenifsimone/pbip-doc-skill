@@ -11,6 +11,11 @@ import html
 from .config import DocGenConfig
 from .utils import sanitize_filename, clean_project_name
 from .html_layout import get_relative_root, get_table_role_badge_class, get_table_role_short
+from .table_doc import TableDocBuilder
+from .measure_doc import MeasureDocBuilder
+from .function_doc import FunctionDocBuilder
+from .expression_doc import ExpressionDocBuilder
+from .index_doc import IndexDocBuilder
 from ..report_schema import PBIPReportModel, VisualDefinition, EvaluatedMetric
 from ..report_parser import parse_measure_reference
 from ..dax_formatter import format_dax
@@ -231,181 +236,184 @@ class HtmlIndexBuilder:
 
 {kpis_html}
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-tables">Tables ({len(tables)})</button>
-          <button class="tab-btn" data-tab-target="tab-measures">Measures ({len(measures)})</button>
-          {'<button class="tab-btn" data-tab-target="tab-reports">Report Pages (' + str(len(pages_rows)) + ')</button>' if pages_rows else ''}
-          {'<button class="tab-btn" data-tab-target="tab-expressions">Expressions (' + str(len(expr_rows)) + ')</button>' if expr_rows else ''}
-          {'<button class="tab-btn" data-tab-target="tab-functions">Functions (' + str(len(func_rows)) + ')</button>' if func_rows else ''}
-          {'<button class="tab-btn" data-tab-target="tab-sources">Data Sources (' + str(len(source_rows)) + ')</button>' if source_rows else ''}
-          <button class="tab-btn" data-tab-target="tab-architecture">Model Architecture</button>
-        </div>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-tables">Tables ({len(tables)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-measures">Measures ({len(measures)})</a>
+        {f'<span class="page-quicknav-sep">•</span><a href="#tab-reports">Report Pages ({len(pages_rows)})</a>' if pages_rows else ''}
+        {f'<span class="page-quicknav-sep">•</span><a href="#tab-expressions">Expressions ({len(expr_rows)})</a>' if expr_rows else ''}
+        {f'<span class="page-quicknav-sep">•</span><a href="#tab-functions">Functions ({len(func_rows)})</a>' if func_rows else ''}
+        {f'<span class="page-quicknav-sep">•</span><a href="#tab-sources">Data Sources ({len(source_rows)})</a>' if source_rows else ''}
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-architecture">Model Architecture</a>
+      </nav>
 
-        <div id="tab-tables" class="tab-content active">
-          <div class="content-card">
-            <h3 class="content-card-title">Published Data Model Tables</h3>
-            <div class="table-toolbar">
-              <input type="text" class="table-filter-input" data-target-table="index-tables-table" placeholder="Filter tables by name or role...">
-            </div>
-            <div class="table-responsive">
-              <table class="data-table" id="index-tables-table">
-                <thead>
-                  <tr>
-                    <th>Table Name</th>
-                    <th>Star Schema Role</th>
-                    <th>Storage Mode</th>
-                    <th>Columns</th>
-                    <th>Measures</th>
-                    <th>Refresh Policy</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          {f'<p class="description-text">{escape(self.data["description"])}</p>' if self.data.get("description") else f'<p class="description-text">Master catalog and architectural reference for semantic model <strong>{escape(self.project_name)}</strong>, documenting tables, measures, relationships, and lineage.</p>'}
+        </div>
+      </section>
+
+      <section id="tab-tables" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Published Data Model Tables ({len(tables)})</h3>
+          <div class="table-responsive">
+            <table class="data-table" id="index-tables-table">
+              <thead>
+                <tr>
+                  <th>Table Name</th>
+                  <th>Star Schema Role</th>
+                  <th>Storage Mode</th>
+                  <th>Columns</th>
+                  <th>Measures</th>
+                  <th>Refresh Policy</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(tables_rows) if tables_rows else '<tr><td colspan="7"><em>No tables cataloged.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
+      </section>
 
-        <div id="tab-measures" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Cataloged DAX Measures</h3>
-            <div class="table-toolbar">
-              <input type="text" class="table-filter-input" data-target-table="index-measures-table" placeholder="Filter measures by name or table...">
-            </div>
-            <div class="table-responsive">
-              <table class="data-table" id="index-measures-table">
-                <thead>
-                  <tr>
-                    <th>Measure Name</th>
-                    <th>Host Table</th>
-                    <th>Calculation Depth</th>
-                    <th>Display Folder</th>
-                    <th>Format String</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
+      <section id="tab-measures" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Cataloged DAX Measures ({len(measures)})</h3>
+          <div class="table-responsive">
+            <table class="data-table" id="index-measures-table">
+              <thead>
+                <tr>
+                  <th>Measure Name</th>
+                  <th>Host Table</th>
+                  <th>Calculation Depth</th>
+                  <th>Display Folder</th>
+                  <th>Format String</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(measures_rows) if measures_rows else '<tr><td colspan="6"><em>No measures cataloged.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
+      </section>
 
-        {f'''<div id="tab-reports" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Interactive Report Pages</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Report Page</th>
-                    <th>Order</th>
-                    <th>Dimensions</th>
-                    <th>Visuals</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
+      {f'''<section id="tab-reports" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Interactive Report Pages ({len(pages_rows)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Report Page</th>
+                  <th>Order</th>
+                  <th>Dimensions</th>
+                  <th>Visuals</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(pages_rows)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>''' if pages_rows else ''}
-
-        {f'''<div id="tab-expressions" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Power Query Expressions & Queries</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Query Name</th>
-                    <th>Target Table</th>
-                    <th>Pipeline Role</th>
-                    <th>Direct Dependencies</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(expr_rows)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>''' if expr_rows else ''}
-
-        {f'''<div id="tab-functions" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">DAX Custom Functions (UDFs)</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Function Name</th>
-                    <th>Return Type</th>
-                    <th>Parameters</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(func_rows)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>''' if func_rows else ''}
-
-        {f'''<div id="tab-sources" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Physical Data Sources</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Connector Type</th>
-                    <th>Connection / Endpoint</th>
-                    <th>Server</th>
-                    <th>Database</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(source_rows)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>''' if source_rows else ''}
-
-        <div id="tab-architecture" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Star Schema & Topological Summary</h3>
-            <p style="color: var(--text-muted); margin-bottom: 1rem;">
-              The semantic model contains <strong>{len(tables)}</strong> tables interconnected via 
-              <strong>{len(relationships)}</strong> logical relationships.
-            </p>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>From (Many Side)</th>
-                    <th>To (One Side)</th>
-                    <th>Cardinality</th>
-                    <th>Cross-Filtering</th>
-                    <th>State</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(rel_rows) if rel_rows else '<tr><td colspan="5"><em>No active relationships defined in model.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      </section>''' if pages_rows else ''}
+
+      {f'''<section id="tab-expressions" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Power Query Expressions & Queries ({len(expr_rows)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Query Name</th>
+                  <th>Target Table</th>
+                  <th>Pipeline Role</th>
+                  <th>Direct Dependencies</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(expr_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>''' if expr_rows else ''}
+
+      {f'''<section id="tab-functions" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">DAX Custom Functions (UDFs) ({len(func_rows)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Function Name</th>
+                  <th>Return Type</th>
+                  <th>Parameters</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(func_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>''' if func_rows else ''}
+
+      {f'''<section id="tab-sources" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Physical Data Sources ({len(source_rows)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Connector Type</th>
+                  <th>Connection / Endpoint</th>
+                  <th>Server</th>
+                  <th>Database</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(source_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>''' if source_rows else ''}
+
+      <section id="tab-architecture" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Star Schema & Topological Summary</h3>
+          <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            The semantic model contains <strong>{len(tables)}</strong> tables interconnected via 
+            <strong>{len(relationships)}</strong> logical relationships.
+          </p>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>From (Many Side)</th>
+                  <th>To (One Side)</th>
+                  <th>Cardinality</th>
+                  <th>Cross-Filtering</th>
+                  <th>State</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(rel_rows) if rel_rows else '<tr><td colspan="5"><em>No active relationships defined in model.</em></td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 """
 
 
@@ -419,21 +427,17 @@ class HtmlTableBuilder:
         config: DocGenConfig,
         project_name: Optional[str] = None,
     ):
-        self.table = table_data
-        self.model = full_model
-        self.config = config
-        self.project_name = project_name or full_model.get("project_name") or "PBIP"
-        self.name = table_data.get("name", "UnnamedTable")
-        self.role = table_data.get("role", "UNKNOWN")
-        self.classification = table_data.get("classification_reasoning", {})
-        self.columns = table_data.get("columns", [])
-        
-        # Hosted measures
-        self.measures = [m for m in full_model.get("measures", []) if m.get("table") == self.name]
-        if not self.measures:
-            self.measures = [m for m in table_data.get("measures", [])]
-
-        self.snowflake_paths = table_data.get("snowflake_paths", [])
+        self.doc_builder = TableDocBuilder(table_data, full_model, config, project_name=project_name)
+        self.table = self.doc_builder.table
+        self.model = self.doc_builder.model
+        self.config = self.doc_builder.config
+        self.project_name = self.doc_builder.project_name
+        self.name = self.doc_builder.name
+        self.role = self.doc_builder.role
+        self.classification = self.doc_builder.classification
+        self.columns = self.doc_builder.columns
+        self.measures = self.doc_builder.measures
+        self.snowflake_paths = self.doc_builder.snowflake_paths
 
     def build_content(self) -> str:
         rel_root = ".."
@@ -491,7 +495,6 @@ class HtmlTableBuilder:
               <span class="badge badge-type">{escape(c_type)}</span>
               {f'<span class="badge badge-dim">Format: {escape(c_fmt)}</span>' if c_fmt else ''}
             </div>
-            <button class="copy-btn" data-copy-target="code-calc-col-{slug}">Copy</button>
           </div>
           {f'<p class="calc-col-desc">{escape(c_desc)}</p>' if c_desc else ''}
           <div class="code-container">
@@ -583,7 +586,6 @@ class HtmlTableBuilder:
         <div class="code-container">
           <div class="code-header">
             <span>Power Query (M) Script</span>
-            <button class="copy-btn" data-copy-target="m-script-code">Copy</button>
           </div>
           <pre><code id="m-script-code">{escape(m_code)}</code></pre>
         </div>
@@ -593,6 +595,23 @@ class HtmlTableBuilder:
         inc = self.table.get("incremental_refresh_policy") or {}
         has_inc = bool(inc.get("is_enabled"))
         criteria_list = self.classification.get("criteria_matched", [])
+
+        # Data Sources Summary rows using shared doc_builder logic
+        sources_summary = self.doc_builder.get_data_sources_summary()
+        source_summary_rows = []
+        for s in sources_summary:
+            stype = s["source_type"]
+            conn = s["connection"]
+            srv = s["server"]
+            db = s["database"]
+            pipe = s["pipeline"]
+            source_summary_rows.append(f"""          <tr>
+            <td><span class="badge badge-type">{escape(stype)}</span></td>
+            <td><code>{escape(conn)}</code></td>
+            <td>{escape(srv)}</td>
+            <td>{escape(db)}</td>
+            <td><span class="badge badge-dim">{escape(pipe)}</span></td>
+          </tr>""")
 
         # KPIs
         kpis_html = f"""
@@ -631,20 +650,53 @@ class HtmlTableBuilder:
 
 {kpis_html}
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-cols">Data Dictionary ({len(self.columns)})</button>
-          {'<button class="tab-btn" data-tab-target="tab-calc-cols">Calculated Columns (' + str(len(calc_cols)) + ')</button>' if calc_cols else ''}
-          <button class="tab-btn" data-tab-target="tab-rels">Relationships ({len(direct_rels)})</button>
-          <button class="tab-btn" data-tab-target="tab-meas">Measures ({len(self.measures)})</button>
-          <button class="tab-btn" data-tab-target="tab-m">Power Query Lineage</button>
-          <button class="tab-btn" data-tab-target="tab-tech">Technical Details</button>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-sources">Data Sources</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-cols">Data Dictionary ({len(self.columns)})</a>
+        {f'<span class="page-quicknav-sep">•</span><a href="#tab-calc-cols">Calculated Columns ({len(calc_cols)})</a>' if calc_cols else ''}
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-rels">Relationships ({len(direct_rels)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-meas">Measures ({len(self.measures)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-m">Power Query Lineage</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-tech">Technical Details</a>
+      </nav>
+
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          {f'<p class="description-text">{escape(self.table["description"])}</p>' if self.table.get("description") else '<p class="description-text description-empty"><em>No description provided in the data model.</em></p>'}
         </div>
 
-        <div id="tab-cols" class="tab-content active">
-          <div class="table-toolbar">
-            <input type="text" class="table-filter-input" data-target-table="table-columns-table" placeholder="Filter columns by name or type...">
+        <div id="tab-sources" class="content-card" style="margin-top: 1.25rem;">
+          <h3 class="content-card-title">Data Sources Summary</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Source Type</th>
+                  <th>Connection / Details</th>
+                  <th>Server</th>
+                  <th>Database / Object</th>
+                  <th>Data Pipeline / Staging</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(source_summary_rows) if source_summary_rows else '<tr><td colspan="5"><em>No external data sources detected.</em></td></tr>'}
+              </tbody>
+            </table>
           </div>
+        </div>
+      </section>
+
+      <section id="tab-cols" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Data Dictionary ({len(self.columns)} Columns)</h3>
           <div class="table-responsive">
             <table class="data-table" id="table-columns-table">
               <thead>
@@ -662,15 +714,21 @@ class HtmlTableBuilder:
             </table>
           </div>
         </div>
+      </section>
 
-        {f'''<div id="tab-calc-cols" class="tab-content">
+      {f'''<section id="tab-calc-cols" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Calculated Columns ({len(calc_cols)})</h3>
           <div style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.85rem;">
             Calculated columns evaluated via DAX expressions inside this table container:
           </div>
 {chr(10).join(calc_col_cards)}
-        </div>''' if calc_cols else ''}
+        </div>
+      </section>''' if calc_cols else ''}
 
-        <div id="tab-rels" class="tab-content">
+      <section id="tab-rels" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Relationships ({len(direct_rels)})</h3>
           <div class="table-responsive">
             <table class="data-table">
               <thead>
@@ -687,10 +745,13 @@ class HtmlTableBuilder:
               </tbody>
             </table>
           </div>
-          {('<div class="content-card" style="margin-top: 1.25rem;"><h4 class="content-card-title">Transitive Snowflake Outriggers</h4><ul class="spec-list">' + chr(10).join(snowflake_html) + '</ul></div>') if snowflake_html else ''}
+          {('<div style="margin-top: 1.25rem;"><h4 class="content-card-title">Transitive Snowflake Outriggers</h4><ul class="spec-list">' + chr(10).join(snowflake_html) + '</ul></div>') if snowflake_html else ''}
         </div>
+      </section>
 
-        <div id="tab-meas" class="tab-content">
+      <section id="tab-meas" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Host Measures ({len(self.measures)})</h3>
           <div class="table-responsive">
             <table class="data-table">
               <thead>
@@ -707,38 +768,38 @@ class HtmlTableBuilder:
             </table>
           </div>
         </div>
+      </section>
 
-        <div id="tab-m" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Staging & ETL Transformation</h3>
+      <section id="tab-m" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Power Query (M) Lineage</h3>
 {m_html}
-          </div>
+        </div>
+      </section>
+
+      <section id="tab-tech" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Star Schema Classification Analysis</h3>
+          <p style="margin-bottom: 0.75rem;"><strong>Assigned Role</strong>: <span class="badge {role_class}">{escape(self.role)}</span> (Confidence: {self.classification.get('confidence_score', 1.0):.0%})</p>
+          <div style="font-size: 0.825rem; color: var(--text-muted); margin-bottom: 0.5rem;">Criteria Matched:</div>
+          <ul class="spec-list">
+            {chr(10).join('<li>• ' + escape(c) + '</li>' for c in criteria_list) if criteria_list else '<li>• Standard heuristic criteria applied.</li>'}
+          </ul>
         </div>
 
-        <div id="tab-tech" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Star Schema Classification Analysis</h3>
-            <p style="margin-bottom: 0.75rem;"><strong>Assigned Role</strong>: <span class="badge {role_class}">{escape(self.role)}</span> (Confidence: {self.classification.get('confidence_score', 1.0):.0%})</p>
-            <div style="font-size: 0.825rem; color: var(--text-muted); margin-bottom: 0.5rem;">Criteria Matched:</div>
-            <ul class="spec-list">
-              {chr(10).join('<li>• ' + escape(c) + '</li>' for c in criteria_list) if criteria_list else '<li>• Standard heuristic criteria applied.</li>'}
-            </ul>
-          </div>
-
-          <div class="content-card">
-            <h3 class="content-card-title">Incremental Refresh Policy</h3>
-            <table class="data-table">
-              <tbody>
-                <tr><td><strong>Policy Status</strong></td><td><span class="badge {'badge-status-active' if has_inc else 'badge-status-inactive'}">{'Enabled' if has_inc else 'Disabled'}</span></td></tr>
-                <tr><td><strong>Storage Mode</strong></td><td><code>{escape(inc.get('mode', self.table.get('storage_mode', 'Import')))}</code></td></tr>
-                <tr><td><strong>Historical Retention (Store)</strong></td><td>{escape(str(inc.get('rolling_window_periods', '—')))} {escape(str(inc.get('rolling_window_granularity', '')))}</td></tr>
-                <tr><td><strong>Refresh Period (Refresh)</strong></td><td>{escape(str(inc.get('incremental_periods', '—')))} {escape(str(inc.get('incremental_granularity', '')))}</td></tr>
-              </tbody>
-            </table>
-            {f'''<div style="margin-top: 1rem;"><div class="spec-group-title">Detect Data Changes Expression</div><div class="code-container"><pre><code>{escape(inc.get('polling_expression', ''))}</code></pre></div></div>''' if inc.get('polling_expression') else ''}
-          </div>
+        <div class="content-card">
+          <h3 class="content-card-title">Incremental Refresh Policy</h3>
+          <table class="data-table">
+            <tbody>
+              <tr><td><strong>Policy Status</strong></td><td><span class="badge {'badge-status-active' if has_inc else 'badge-status-inactive'}">{'Enabled' if has_inc else 'Disabled'}</span></td></tr>
+              <tr><td><strong>Storage Mode</strong></td><td><code>{escape(inc.get('mode', self.table.get('storage_mode', 'Import')))}</code></td></tr>
+              <tr><td><strong>Historical Retention (Store)</strong></td><td>{escape(str(inc.get('rolling_window_periods', '—')))} {escape(str(inc.get('rolling_window_granularity', '')))}</td></tr>
+              <tr><td><strong>Refresh Period (Refresh)</strong></td><td>{escape(str(inc.get('incremental_periods', '—')))} {escape(str(inc.get('incremental_granularity', '')))}</td></tr>
+            </tbody>
+          </table>
+          {f'''<div style="margin-top: 1rem;"><div class="spec-group-title">Detect Data Changes Expression</div><div class="code-container"><pre><code>{escape(inc.get('polling_expression', ''))}</code></pre></div></div>''' if inc.get('polling_expression') else ''}
         </div>
-      </div>
+      </section>
 """
 
 
@@ -752,50 +813,70 @@ class HtmlMeasureBuilder:
         config: DocGenConfig,
         project_name: Optional[str] = None,
     ):
-        self.measure = measure_data
-        self.model = full_model
-        self.config = config
-        self.project_name = project_name or full_model.get("project_name") or "PBIP"
-        self.name = measure_data.get("name", "UnnamedMeasure")
-        self.table = measure_data.get("table", "Model")
-        self.depth = measure_data.get("calculation_depth", 0)
+        self.doc_builder = MeasureDocBuilder(measure_data, full_model, config, project_name=project_name)
+        self.measure = self.doc_builder.measure
+        self.model = self.doc_builder.model
+        self.config = self.doc_builder.config
+        self.project_name = self.doc_builder.project_name
+        self.name = self.doc_builder.name
+        self.table = self.doc_builder.table
+        self.depth = self.doc_builder.depth
+        self.dax = self.doc_builder.dax
+        self.format_string = self.doc_builder.format_string
+        self.description = self.doc_builder.description
+        self.direct_deps = self.doc_builder.direct_deps
+        self.all_upstream = self.doc_builder.all_upstream
+        self.downstream = self.doc_builder.downstream
+        self.referenced_functions = self.doc_builder.referenced_functions
+        self.referenced_cols = self.doc_builder.referenced_cols
+        self.referenced_tables = self.doc_builder.referenced_tables
+        self.measure_table_map = self.doc_builder.measure_table_map
 
     def build_content(self) -> str:
         rel_root = "../.."
         clean_tbl = sanitize_filename(self.table)
         tbl_url = f"{rel_root}/{self.config.tables_subdir.strip('/\\\\')}/{clean_tbl}.html"
 
-        upstream_m = self.measure.get("upstream_measures", [])
-        downstream_m = self.measure.get("downstream_measures", [])
-        ref_cols = self.measure.get("referenced_columns", [])
+        upstream_m = self.direct_deps
+        downstream_m = self.downstream
+        ref_cols = self.referenced_cols
 
-        # Format DAX with formatting utility
-        dax = self.measure.get("dax_expression", "")
-        formatted_dax = format_dax(dax) if dax else "-- No DAX expression provided"
+        # Format DAX with formatting utility (identical canonical signature to Markdown)
+        dax = self.dax
+        formatted_dax = format_dax(
+            dax,
+            name=self.name,
+            entity_type="measure",
+            table_name=self.table,
+        ) if dax else "-- No DAX expression provided"
 
-        # Upstream table
+        # Upstream table (resolved via shared measure_table_map)
         up_rows = []
         for um in upstream_m:
-            target_tbl = self.table
+            target_tbl = self.measure_table_map.get(um, self.table)
+            clean_u_tbl = sanitize_filename(target_tbl)
             clean_u = sanitize_filename(um)
-            m_url = f"{rel_root}/{self.config.measures_subdir.strip('/\\\\')}/{clean_tbl}/{clean_u}.html"
+            m_url = f"{rel_root}/{self.config.measures_subdir.strip('/\\\\')}/{clean_u_tbl}/{clean_u}.html"
+            u_tbl_url = f"{rel_root}/{self.config.tables_subdir.strip('/\\\\')}/{clean_u_tbl}.html"
             up_rows.append(f"""          <tr>
             <td><strong><a href="{m_url}">[{escape(um)}]</a></strong></td>
-            <td><a href="{tbl_url}">{escape(target_tbl)}</a></td>
+            <td><a href="{u_tbl_url}">{escape(target_tbl)}</a></td>
           </tr>""")
 
-        # Downstream table
+        # Downstream table (resolved via shared measure_table_map)
         down_rows = []
         for dm in downstream_m:
-            target_tbl = self.table
+            target_tbl = self.measure_table_map.get(dm, self.table)
+            clean_d_tbl = sanitize_filename(target_tbl)
             clean_d = sanitize_filename(dm)
-            m_url = f"{rel_root}/{self.config.measures_subdir.strip('/\\\\')}/{clean_tbl}/{clean_d}.html"
+            m_url = f"{rel_root}/{self.config.measures_subdir.strip('/\\\\')}/{clean_d_tbl}/{clean_d}.html"
+            d_tbl_url = f"{rel_root}/{self.config.tables_subdir.strip('/\\\\')}/{clean_d_tbl}.html"
             down_rows.append(f"""          <tr>
             <td><strong><a href="{m_url}">[{escape(dm)}]</a></strong></td>
-            <td><a href="{tbl_url}">{escape(target_tbl)}</a></td>
+            <td><a href="{d_tbl_url}">{escape(target_tbl)}</a></td>
           </tr>""")
 
-        # Ref cols rows
+        # Ref cols rows (filtered via configuration)
         col_rows = []
         for c in ref_cols:
             if isinstance(c, dict):
@@ -839,7 +920,7 @@ class HtmlMeasureBuilder:
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Format String</div>
-          <div class="kpi-value" style="font-size: 1.25rem;"><code>{escape(self.measure.get('format_string', '') or '—')}</code></div>
+          <div class="kpi-value" style="font-size: 1.25rem;"><code>{escape(self.format_string or '—')}</code></div>
           <div class="kpi-sub">{escape(self.measure.get('display_folder', '') or 'Root Folder')}</div>
         </div>
       </div>
@@ -856,97 +937,106 @@ class HtmlMeasureBuilder:
 
 {kpis_html}
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-dax">DAX Formula</button>
-          <button class="tab-btn" data-tab-target="tab-deps">Dependencies & Impact ({len(upstream_m) + len(downstream_m)})</button>
-          <button class="tab-btn" data-tab-target="tab-cols">Referenced Columns ({len(ref_cols)})</button>
-          <button class="tab-btn" data-tab-target="tab-tech">Technical Details</button>
-        </div>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-dax">DAX Formula</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-deps">Dependencies & Impact ({len(upstream_m) + len(downstream_m)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-cols">Referenced Columns ({len(ref_cols)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-tech">Technical Details</a>
+      </nav>
 
-        <div id="tab-dax" class="tab-content active">
-          <div class="content-card">
-            <h3 class="content-card-title">DAX Expression</h3>
-            <div class="code-container">
-              <div class="code-header">
-                <span>DAX Formula</span>
-                <button class="copy-btn" data-copy-target="measure-dax-code">Copy</button>
-              </div>
-              <pre><code id="measure-dax-code">{escape(formatted_dax)}</code></pre>
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          {f'<p class="description-text">{escape(self.description)}</p>' if self.description else '<p class="description-text description-empty"><em>No description provided in the data model.</em></p>'}
+        </div>
+      </section>
+
+      <section id="tab-dax" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">DAX Expression</h3>
+          <div class="code-container">
+            <div class="code-header">
+              <span>DAX Formula</span>
             </div>
+            <pre><code id="measure-dax-code">{escape(formatted_dax)}</code></pre>
           </div>
         </div>
+      </section>
 
-        <div id="tab-deps" class="tab-content">
-          <div class="content-card" style="margin-bottom: 1.25rem;">
-            <h3 class="content-card-title">Preceding Measures in DAG (Upstream - {len(upstream_m)})</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Measure</th>
-                    <th>Host Table</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(up_rows) if up_rows else '<tr><td colspan="2"><em>Leaf calculation: No upstream measures referenced.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="content-card">
-            <h3 class="content-card-title">Dependent Measures (Downstream Impact - {len(downstream_m)})</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Measure</th>
-                    <th>Host Table</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(down_rows) if down_rows else '<tr><td colspan="2"><em>Terminal calculation: No other measures depend on this formula.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div id="tab-cols" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Referenced Model Columns</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Table</th>
-                    <th>Column Name</th>
-                  </tr>
-                </thead>
-                <tbody>
-{chr(10).join(col_rows) if col_rows else '<tr><td colspan="2"><em>No physical or calculated columns directly referenced.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div id="tab-tech" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Technical Specifications</h3>
+      <section id="tab-deps" class="content-section">
+        <div class="content-card" style="margin-bottom: 1.25rem;">
+          <h3 class="content-card-title">Preceding Measures in DAG (Upstream - {len(upstream_m)})</h3>
+          <div class="table-responsive">
             <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th>Host Table</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td><strong>Model Key</strong></td><td><code>{escape(self.measure.get('model_key', f'{self.table}[{self.name}]'))}</code></td></tr>
-                <tr><td><strong>Display Folder</strong></td><td>{escape(self.measure.get('display_folder', '') or '—')}</td></tr>
-                <tr><td><strong>Format String</strong></td><td><code>{escape(self.measure.get('format_string', '') or '—')}</code></td></tr>
-                <tr><td><strong>Hidden in View Mode</strong></td><td>{'Yes' if self.measure.get('is_hidden') else 'No'}</td></tr>
-                <tr><td><strong>External Bound (Composite)</strong></td><td>{'Yes' if self.measure.get('is_external_measure') else 'No'}</td></tr>
+{chr(10).join(up_rows) if up_rows else '<tr><td colspan="2"><em>Leaf calculation: No upstream measures referenced.</em></td></tr>'}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
+
+        <div class="content-card">
+          <h3 class="content-card-title">Dependent Measures (Downstream Impact - {len(downstream_m)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th>Host Table</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(down_rows) if down_rows else '<tr><td colspan="2"><em>Terminal calculation: No other measures depend on this formula.</em></td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-cols" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Referenced Model Columns</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Column Name</th>
+                </tr>
+              </thead>
+              <tbody>
+{chr(10).join(col_rows) if col_rows else '<tr><td colspan="2"><em>No physical or calculated columns directly referenced.</em></td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-tech" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Technical Specifications</h3>
+          <table class="data-table">
+            <tbody>
+              <tr><td><strong>Model Key</strong></td><td><code>{escape(self.measure.get('model_key', f'{self.table}[{self.name}]'))}</code></td></tr>
+              <tr><td><strong>Display Folder</strong></td><td>{escape(self.measure.get('display_folder', '') or '—')}</td></tr>
+              <tr><td><strong>Format String</strong></td><td><code>{escape(self.measure.get('format_string', '') or '—')}</code></td></tr>
+              <tr><td><strong>Hidden in View Mode</strong></td><td>{'Yes' if self.measure.get('is_hidden') else 'No'}</td></tr>
+              <tr><td><strong>External Bound (Composite)</strong></td><td>{'Yes' if self.measure.get('is_external_measure') else 'No'}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 """
 
 
@@ -1158,100 +1248,112 @@ class HtmlVisualBuilder:
 
 {kpis_html}
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-visuals">Visuals ({len(dynamic_visuals)})</button>
-          <button class="tab-btn" data-tab-target="tab-filters">Canvas Filter Context</button>
-          <button class="tab-btn" data-tab-target="tab-tech">Spatial Layout & Geometry</button>
-        </div>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-visuals">Visuals ({len(dynamic_visuals)})</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-filters">Canvas Filter Context</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-tech">Spatial Layout & Geometry</a>
+      </nav>
 
-        <div id="tab-visuals" class="tab-content active">
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          <p class="description-text">Presentation and evaluation context specification for report page <strong>{escape(self.page.display_name)}</strong>. It details the active filter perimeter (locked constraints, interactive defaults, canvas slicers) and provides spatial-to-metric mappings for <strong>{len(dynamic_visuals)}</strong> dynamic visual elements.</p>
+        </div>
+      </section>
+
+      <section id="tab-visuals" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Dynamic Visual Containers ({len(dynamic_visuals)})</h3>
 {chr(10).join(visual_cards) if visual_cards else '<p style="color: var(--text-muted);"><em>No dynamic data-bound visual containers on this page.</em></p>'}
         </div>
+      </section>
 
-        <div id="tab-filters" class="tab-content">
-          <div class="content-card" style="margin-bottom: 1.25rem;">
-            <h3 class="content-card-title">Locked Active Page Filters (Hard Constraints)</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Target Table</th>
-                    <th>Target Field</th>
-                    <th>Operator</th>
-                    <th>Applied Values</th>
-                    <th>Type</th>
-                  </tr>
-                </thead>
-                <tbody>
+      <section id="tab-filters" class="content-section">
+        <div class="content-card" style="margin-bottom: 1.25rem;">
+          <h3 class="content-card-title">Locked Active Page Filters (Hard Constraints)</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Target Table</th>
+                  <th>Target Field</th>
+                  <th>Operator</th>
+                  <th>Applied Values</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(locked_filters_rows) if locked_filters_rows else '<tr><td colspan="5"><em>No locked page filters active on this canvas.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
+        </div>
 
-          <div class="content-card" style="margin-bottom: 1.25rem;">
-            <h3 class="content-card-title">Interactive Filter Pane Defaults</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Target Table</th>
-                    <th>Target Field</th>
-                    <th>Default Selection</th>
-                  </tr>
-                </thead>
-                <tbody>
+        <div class="content-card" style="margin-bottom: 1.25rem;">
+          <h3 class="content-card-title">Interactive Filter Pane Defaults</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Target Table</th>
+                  <th>Target Field</th>
+                  <th>Default Selection</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(interactive_filters_rows) if interactive_filters_rows else '<tr><td colspan="3"><em>No interactive filter panel filters exposed.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
+        </div>
 
-          <div class="content-card">
-            <h3 class="content-card-title">Canvas Slicer Controls</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Slicer Control</th>
-                    <th>Target Field</th>
-                    <th>Default Selection</th>
-                    <th>Synced Across Pages</th>
-                  </tr>
-                </thead>
-                <tbody>
+        <div class="content-card">
+          <h3 class="content-card-title">Canvas Slicer Controls</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Slicer Control</th>
+                  <th>Target Field</th>
+                  <th>Default Selection</th>
+                  <th>Synced Across Pages</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(slicers_rows) if slicers_rows else '<tr><td colspan="4"><em>No interactive on-canvas slicers detected.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
+      </section>
 
-        <div id="tab-tech" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Exact Spatial Coordinates & Container Specifications</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Visual Title</th>
-                    <th>Visual ID</th>
-                    <th>Type</th>
-                    <th>Position (X, Y)</th>
-                    <th>Size (W x H)</th>
-                    <th>Z-Index</th>
-                  </tr>
-                </thead>
-                <tbody>
+      <section id="tab-tech" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Exact Spatial Coordinates & Container Specifications</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Visual Title</th>
+                  <th>Visual ID</th>
+                  <th>Type</th>
+                  <th>Position (X, Y)</th>
+                  <th>Size (W x H)</th>
+                  <th>Z-Index</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(coords_rows) if coords_rows else '<tr><td colspan="7"><em>No visual containers detected.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      </section>
 """
 
 
@@ -1265,14 +1367,18 @@ class HtmlExpressionBuilder:
         config: DocGenConfig,
         project_name: Optional[str] = None,
     ):
-        self.expression = expression_data
-        self.model = full_model
-        self.config = config
-        self.project_name = project_name or "PBIP"
-        self.name = expression_data.get("query_name", "SharedExpression")
+        self.doc_builder = ExpressionDocBuilder(expression_data, full_model, config, project_name=project_name)
+        self.expression = self.doc_builder.expr
+        self.model = self.doc_builder.model
+        self.config = self.doc_builder.config
+        self.project_name = self.doc_builder.project_name
+        self.name = self.doc_builder.name
+        self.is_staging = self.doc_builder.is_staging
+        self.full_m = self.doc_builder.full_m
+        self.direct_deps = self.doc_builder.direct_deps
 
     def build_content(self) -> str:
-        q_name = self.expression.get("query_name", "Expression")
+        q_name = self.expression.get("query_name", self.name)
         target_table = self.expression.get("target_table") or "None (Staging Query)"
         is_staging = self.expression.get("is_staging", True)
         direct_deps = self.expression.get("direct_dependencies", [])
@@ -1290,7 +1396,7 @@ class HtmlExpressionBuilder:
           <span>Expression: {escape(q_name)}</span>
           <span class="badge badge-dim">{'Staging' if is_staging else 'Entity'}</span>
         </h1>
-        <p class="page-subtitle">Power Query M shared ETL query and transformation pipeline.</p>
+        <p class="page-subtitle">{escape(self.expression.get('description', '') or 'Power Query M shared ETL query and transformation pipeline.')}</p>
       </div>
 
       <div class="kpi-grid">
@@ -1311,32 +1417,39 @@ class HtmlExpressionBuilder:
         </div>
       </div>
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-m">Power Query (M) Script</button>
-          <button class="tab-btn" data-tab-target="tab-deps">Dependencies ({len(direct_deps)})</button>
-        </div>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-m">Power Query (M) Script</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-deps">Dependencies ({len(direct_deps)})</a>
+      </nav>
 
-        <div id="tab-m" class="tab-content active">
-          <div class="content-card">
-            <h3 class="content-card-title">M Formula</h3>
-            <div class="code-container">
-              <div class="code-header">
-                <span>Power Query Script</span>
-                <button class="copy-btn" data-copy-target="expression-m-code">Copy</button>
-              </div>
-              <pre><code id="expression-m-code">{escape(m_code)}</code></pre>
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          {f'<p class="description-text">{escape(self.expression["description"])}</p>' if self.expression.get("description") else '<p class="description-text description-empty"><em>No description provided in the data model.</em></p>'}
+        </div>
+      </section>
+
+      <section id="tab-m" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">M Formula</h3>
+          <div class="code-container">
+            <div class="code-header">
+              <span>Power Query Script</span>
             </div>
+            <pre><code id="expression-m-code">{escape(m_code)}</code></pre>
           </div>
         </div>
+      </section>
 
-        <div id="tab-deps" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Direct Upstream Queries</h3>
-            {('<ul class="spec-list">' + chr(10).join(dep_links) + '</ul>') if dep_links else '<p style="color: var(--text-muted);"><em>Root query: No direct dependencies.</em></p>'}
-          </div>
+      <section id="tab-deps" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Direct Upstream Queries</h3>
+          {('<ul class="spec-list">' + chr(10).join(dep_links) + '</ul>') if dep_links else '<p style="color: var(--text-muted);"><em>Root query: No direct dependencies.</em></p>'}
         </div>
-      </div>
+      </section>
 """
 
 
@@ -1350,17 +1463,25 @@ class HtmlFunctionBuilder:
         config: DocGenConfig,
         project_name: Optional[str] = None,
     ):
-        self.function = function_data
-        self.model = full_model
-        self.config = config
-        self.project_name = project_name or "PBIP"
-        self.name = function_data.get("name", "UDF")
+        self.doc_builder = FunctionDocBuilder(function_data, full_model, config, project_name=project_name)
+        self.function = self.doc_builder.fn
+        self.model = self.doc_builder.model
+        self.config = self.doc_builder.config
+        self.project_name = self.doc_builder.project_name
+        self.name = self.doc_builder.name
+        self.signature = self.doc_builder.signature
 
     def build_content(self) -> str:
-        f_name = self.function.get("name", "Function")
+        f_name = self.name
         ret_type = self.function.get("return_type", "Variant")
         params = self.function.get("parameters", [])
         body = self.function.get("expression") or self.function.get("body") or ""
+        formatted_dax = format_dax(
+            body,
+            name=self.name,
+            entity_type="function",
+            parameters_signature=self.signature,
+        ) if body else "-- No DAX body provided"
 
         param_rows = []
         for p in params:
@@ -1376,7 +1497,7 @@ class HtmlFunctionBuilder:
           <span>Function: {escape(f_name)}</span>
           <span class="badge badge-dim">UDF</span>
         </h1>
-        <p class="page-subtitle">User-Defined DAX Function specification and parameters.</p>
+        <p class="page-subtitle">{escape(self.function.get('description', '') or 'User-Defined DAX Function specification and parameters.')}</p>
       </div>
 
       <div class="kpi-grid">
@@ -1392,43 +1513,50 @@ class HtmlFunctionBuilder:
         </div>
       </div>
 
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab-target="tab-body">DAX Function Body</button>
-          <button class="tab-btn" data-tab-target="tab-params">Parameters ({len(params)})</button>
-        </div>
+      <nav class="page-quicknav">
+        <a href="#tab-desc">Description</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-body">DAX Function Body</a>
+        <span class="page-quicknav-sep">•</span>
+        <a href="#tab-params">Parameters ({len(params)})</a>
+      </nav>
 
-        <div id="tab-body" class="tab-content active">
-          <div class="content-card">
-            <h3 class="content-card-title">Implementation Expression</h3>
-            <div class="code-container">
-              <div class="code-header">
-                <span>DAX Body</span>
-                <button class="copy-btn" data-copy-target="function-dax-code">Copy</button>
-              </div>
-              <pre><code id="function-dax-code">{escape(body)}</code></pre>
+      <section id="tab-desc" class="content-section">
+        <div class="content-card description-card">
+          <h3 class="content-card-title">Description</h3>
+          {f'<p class="description-text">{escape(self.function["description"])}</p>' if self.function.get("description") else '<p class="description-text description-empty"><em>No description provided in the data model.</em></p>'}
+        </div>
+      </section>
+
+      <section id="tab-body" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Implementation Expression</h3>
+          <div class="code-container">
+            <div class="code-header">
+              <span>DAX Body</span>
             </div>
+            <pre><code id="function-dax-code">{escape(formatted_dax)}</code></pre>
           </div>
         </div>
+      </section>
 
-        <div id="tab-params" class="tab-content">
-          <div class="content-card">
-            <h3 class="content-card-title">Parameters</h3>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Parameter Name</th>
-                    <th>Data Type</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
+      <section id="tab-params" class="content-section">
+        <div class="content-card">
+          <h3 class="content-card-title">Parameters ({len(params)})</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Parameter Name</th>
+                  <th>Data Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
 {chr(10).join(param_rows) if param_rows else '<tr><td colspan="3"><em>No parameters required.</em></td></tr>'}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      </section>
 """

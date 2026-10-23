@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Optional
 
 from .parser import PBIPParser
-from .docgen import DocGenConfig, MarkdownDocGenerator, HtmlDocGenerator
+from .docgen import DocGenConfig, MarkdownDocGenerator, HtmlDocGenerator, WorkspaceDocGenerator
+from .codebase_scanner import CodebaseScanner
 
 
 def _load_cli_config(args, base_path: Optional[str] = None) -> DocGenConfig:
@@ -266,6 +267,11 @@ def main():
         default=None,
         help="Custom header title for HTML documentation portal",
     )
+    docgen_parser.add_argument(
+        "--workspace",
+        action="store_true",
+        help="Force multi-artifact workspace portal generation (models/ and reports/ layout)",
+    )
 
     # Command: config
     config_parser = subparsers.add_parser("config", help="Inspect, export or initialize configuration JSON files")
@@ -430,51 +436,85 @@ def main():
 
         out_fmt = (config.output_format or "markdown").lower()
         try:
-            if out_fmt in ("markdown", "both"):
-                md_dir = f"{config.output_dir}/markdown" if out_fmt == "both" else config.output_dir
-                md_generator = MarkdownDocGenerator(config)
-                generated_docs = md_generator.write_to_directory(args.path, md_dir)
-                table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
-                measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
-                function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
-                visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
-                svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
-                index_doc = next((p for p in generated_docs if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
-                print(f"[SUCCESS] Markdown documentation successfully generated in '{md_dir}'!")
-                print(f" -> Index: {md_dir}/{index_doc}")
-                print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({md_dir}/{config.tables_subdir}/)")
-                print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({md_dir}/{config.measures_subdir}/)")
-                if function_docs:
-                    print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({md_dir}/{config.functions_subdir}/)")
-                if visual_docs:
-                    print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({md_dir}/{config.visuals_subdir}/)")
-                if svg_docs:
-                    print(f" -> Visual Maps: {len(svg_docs)} scaled SVG canvas mini-maps ({md_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
-                elif not config.include_visual_docs:
-                    print(f" -> Visuals: Disabled (--no-visuals)")
-                print(f" -> Format: Pure Markdown + YAML Frontmatter (AI-RAG optimized)")
+            force_workspace = getattr(args, "workspace", False)
+            scanner = CodebaseScanner(args.path, config=config)
+            scan_result = scanner.scan(populate_symbols=True)
 
-            if out_fmt in ("html", "both"):
-                html_dir = f"{config.output_dir}/html" if out_fmt == "both" else config.output_dir
-                html_generator = HtmlDocGenerator(config)
-                generated_html = html_generator.write_to_directory(args.path, html_dir)
-                table_html = [p for p in generated_html if p.startswith(config.tables_subdir) and p.endswith(".html")]
-                measure_html = [p for p in generated_html if p.startswith(config.measures_subdir) and p.endswith(".html")]
-                function_html = [p for p in generated_html if p.startswith(config.functions_subdir) and p.endswith(".html")]
-                visual_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".html")]
-                svg_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
-                print(f"[SUCCESS] Native HTML Wiki Documentation successfully generated in '{html_dir}'!")
-                print(f" -> Portal Entry: {html_dir}/index.html")
-                print(f" -> Tables: {len(table_html)} dedicated HTML pages ({html_dir}/{config.tables_subdir}/)")
-                print(f" -> Measures: {len(measure_html)} dedicated HTML pages ({html_dir}/{config.measures_subdir}/)")
-                if function_html:
-                    print(f" -> Functions: {len(function_html)} dedicated HTML pages ({html_dir}/{config.functions_subdir}/)")
-                if visual_html:
-                    print(f" -> Visuals: {len(visual_html)} dedicated Page HTML files ({html_dir}/{config.visuals_subdir}/)")
-                if svg_html:
-                    print(f" -> Visual Maps: {len(svg_html)} scaled SVG canvas mini-maps ({html_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
-                print(f" -> Assets: CSS stylesheet, Vanilla JS app, and offline search index ({html_dir}/assets/)")
-                print(f" -> Format: Native HTML5 + Responsive Enterprise Wiki Portal (Zero dependencies, file:// safe)")
+            is_workspace = force_workspace or (
+                not scan_result.is_single_artifact()
+                and (
+                    len(scan_result.models) > 1
+                    or len(scan_result.reports) > 1
+                    or (len(scan_result.models) == 1 and len(scan_result.reports) >= 1 and not Path(args.path).suffix.lower() in (".semanticmodel", ".report", ".bim", ".json"))
+                )
+            )
+
+            if is_workspace:
+                ws_generator = WorkspaceDocGenerator(config)
+                ws_generator.write_to_directory(scan_result, config.output_dir, out_fmt)
+
+                if out_fmt in ("markdown", "both"):
+                    md_dir = f"{config.output_dir}/markdown" if out_fmt == "both" else config.output_dir
+                    print(f"[SUCCESS] Multi-Artifact Workspace Markdown documentation successfully generated in '{md_dir}'!")
+                    print(f" -> Master Catalog & Lineage Matrix: {md_dir}/README.md")
+                    print(f" -> Semantic Models ({len(scan_result.models)}): {md_dir}/models/")
+                    print(f" -> Reports & Dashboards ({len(scan_result.reports)}): {md_dir}/reports/")
+                    print(f" -> Format: Modular Markdown + YAML Frontmatter (AI-RAG optimized)")
+
+                if out_fmt in ("html", "both"):
+                    html_dir = f"{config.output_dir}/html" if out_fmt == "both" else config.output_dir
+                    print(f"[SUCCESS] Multi-Artifact Enterprise Wiki Portal successfully generated in '{html_dir}'!")
+                    print(f" -> Portal Entry: {html_dir}/index.html")
+                    print(f" -> Semantic Models ({len(scan_result.models)}): {html_dir}/models/")
+                    print(f" -> Reports & Dashboards ({len(scan_result.reports)}): {html_dir}/reports/")
+                    print(f" -> Assets: CSS stylesheet (Zero-JS) ({html_dir}/assets/)")
+                    print(f" -> Format: Native HTML5 + Unified Accordion Tree (Zero dependencies, file:// safe)")
+            else:
+                if out_fmt in ("markdown", "both"):
+                    md_dir = f"{config.output_dir}/markdown" if out_fmt == "both" else config.output_dir
+                    md_generator = MarkdownDocGenerator(config)
+                    generated_docs = md_generator.write_to_directory(args.path, md_dir)
+                    table_docs = [p for p in generated_docs if p.startswith(config.tables_subdir)]
+                    measure_docs = [p for p in generated_docs if p.startswith(config.measures_subdir)]
+                    function_docs = [p for p in generated_docs if p.startswith(config.functions_subdir)]
+                    visual_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".md")]
+                    svg_docs = [p for p in generated_docs if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
+                    index_doc = next((p for p in generated_docs if "/" not in p and "\\" not in p and p.endswith(".md")), "INDEX.md")
+                    print(f"[SUCCESS] Markdown documentation successfully generated in '{md_dir}'!")
+                    print(f" -> Index: {md_dir}/{index_doc}")
+                    print(f" -> Tables: {len(table_docs)} dedicated Markdown files ({md_dir}/{config.tables_subdir}/)")
+                    print(f" -> Measures: {len(measure_docs)} dedicated Markdown files ({md_dir}/{config.measures_subdir}/)")
+                    if function_docs:
+                        print(f" -> Functions: {len(function_docs)} dedicated Markdown files ({md_dir}/{config.functions_subdir}/)")
+                    if visual_docs:
+                        print(f" -> Visuals: {len(visual_docs)} dedicated Page Markdown files ({md_dir}/{config.visuals_subdir}/)")
+                    if svg_docs:
+                        print(f" -> Visual Maps: {len(svg_docs)} scaled SVG canvas mini-maps ({md_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
+                    elif not config.include_visual_docs:
+                        print(f" -> Visuals: Disabled (--no-visuals)")
+                    print(f" -> Format: Pure Markdown + YAML Frontmatter (AI-RAG optimized)")
+
+                if out_fmt in ("html", "both"):
+                    html_dir = f"{config.output_dir}/html" if out_fmt == "both" else config.output_dir
+                    html_generator = HtmlDocGenerator(config)
+                    generated_html = html_generator.write_to_directory(args.path, html_dir)
+                    table_html = [p for p in generated_html if p.startswith(config.tables_subdir) and p.endswith(".html")]
+                    measure_html = [p for p in generated_html if p.startswith(config.measures_subdir) and p.endswith(".html")]
+                    function_html = [p for p in generated_html if p.startswith(config.functions_subdir) and p.endswith(".html")]
+                    visual_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".html")]
+                    svg_html = [p for p in generated_html if p.startswith(config.visuals_subdir) and p.endswith(".svg")]
+                    print(f"[SUCCESS] Native HTML Wiki Documentation successfully generated in '{html_dir}'!")
+                    print(f" -> Portal Entry: {html_dir}/index.html")
+                    print(f" -> Tables: {len(table_html)} dedicated HTML pages ({html_dir}/{config.tables_subdir}/)")
+                    print(f" -> Measures: {len(measure_html)} dedicated HTML pages ({html_dir}/{config.measures_subdir}/)")
+                    if function_html:
+                        print(f" -> Functions: {len(function_html)} dedicated HTML pages ({html_dir}/{config.functions_subdir}/)")
+                    if visual_html:
+                        print(f" -> Visuals: {len(visual_html)} dedicated Page HTML files ({html_dir}/{config.visuals_subdir}/)")
+                    if svg_html:
+                        print(f" -> Visual Maps: {len(svg_html)} scaled SVG canvas mini-maps ({html_dir}/{config.visuals_subdir}/{config.visual_assets_subdir}/)")
+                    print(f" -> Assets: CSS stylesheet (Zero-JS) ({html_dir}/assets/)")
+                    print(f" -> Format: Native HTML5 + Responsive Enterprise Wiki Portal (Zero dependencies, file:// safe)")
 
             print(f" -> Auto Date Tables Excluded: {'Yes (default)' if config.exclude_auto_date_tables else 'No (included)'}")
             print(f" -> Inherited Entities Published: {'Yes' if config.include_inherited_entities else 'No (out of scope by default)'}")

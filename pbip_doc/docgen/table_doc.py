@@ -127,6 +127,7 @@ class TableDocBuilder:
             "entity_name": self.name,
             "doc_type": "data_model_table",
             "role": self.role,
+            "description": self.table.get("description"),
             "confidence_score": self.classification.get("confidence_score", 1.0),
             "columns_count": len(self.columns),
             "measures_count": len(self.measures),
@@ -150,11 +151,20 @@ class TableDocBuilder:
             "",
             f"**Architectural Role**: `{self.role}` | **Source**: `{self.table.get('source_type', 'PowerQuery')}` | **Columns**: `{len(self.columns)}` | **Associated Measures**: `{len(self.measures)}`",
             "",
-            "## Semantic Overview & Business Purpose",
+            "## Description",
+            "",
         ]
 
         if self.table.get("description"):
             lines.append(f"> {self.table['description']}")
+        else:
+            lines.append("*No description provided.*")
+        lines.append("")
+
+        # Data Sources Summary Table (placed right under Description)
+        sources_summary = self._build_data_sources_summary_markdown()
+        if sources_summary:
+            lines.append(sources_summary)
             lines.append("")
 
         if self.table.get("is_inherited"):
@@ -212,6 +222,99 @@ class TableDocBuilder:
                 lines.append(f"- {r}")
 
         return "\n".join(lines)
+
+    def get_data_sources_summary(self) -> List[Dict[str, str]]:
+        """
+        Extracts normalized summary data for all data sources feeding this table.
+        Single source of truth used for both Markdown and HTML generation.
+        """
+        sources = []
+        root_sources = self.table.get("root_data_sources", [])
+        upstream = self.table.get("upstream_queries_chain", [])
+        pipe_label = " ➔ ".join(upstream + [self.name]) if upstream else "Direct Ingestion"
+
+        if root_sources:
+            for s in root_sources:
+                if isinstance(s, dict):
+                    stype = s.get("source_type") or "GENERIC"
+                    conn = str(s.get("connection_string") or s.get("endpoint_or_path") or "—").replace("\\", "/")
+                    srv = s.get("server") or "—"
+                    db = s.get("database") or "—"
+                else:
+                    stype = getattr(s, "source_type", "GENERIC")
+                    conn = str(getattr(s, "connection_string", None) or getattr(s, "endpoint_or_path", None) or "—").replace("\\", "/")
+                    srv = getattr(s, "server", None) or "—"
+                    db = getattr(s, "database", None) or "—"
+                sources.append({
+                    "source_type": stype,
+                    "connection": conn,
+                    "server": srv,
+                    "database": db,
+                    "pipeline": pipe_label,
+                })
+        elif self.table.get("source_type") == "CalculatedTable":
+            ref_t = self.table.get("referenced_tables", [])
+            ref_label = f"References: {', '.join(ref_t)}" if ref_t else "—"
+            sources.append({
+                "source_type": "DAX Calculated Table",
+                "connection": "Dynamic in-memory DAX expression",
+                "server": "—",
+                "database": ref_label,
+                "pipeline": "Internal DAX Engine",
+            })
+        elif self.table.get("source_type") == "CalculationGroup":
+            sources.append({
+                "source_type": "Calculation Group",
+                "connection": "In-memory DAX calculation items",
+                "server": "—",
+                "database": "—",
+                "pipeline": "Internal DAX Engine",
+            })
+        elif self.table.get("is_inherited"):
+            sources.append({
+                "source_type": "Inherited Entity",
+                "connection": self.table.get("inherited_model_name") or self.table.get("inherited_expression_source") or "Remote Semantic Model",
+                "server": "—",
+                "database": self.table.get("inherited_entity_name") or self.name,
+                "pipeline": "Direct Lake / AS Composite",
+            })
+        else:
+            lineage = self.table.get("power_query_lineage") or {}
+            if isinstance(lineage, dict) and lineage.get("is_inline_table"):
+                stype = "MANUAL_INLINE"
+                conn = "In-Memory Inline Table (#table)"
+            else:
+                stype = self.table.get("source_type") or "PowerQuery"
+                conn = "Power Query M Script / Partition"
+            sources.append({
+                "source_type": stype,
+                "connection": conn,
+                "server": "—",
+                "database": "—",
+                "pipeline": pipe_label,
+            })
+        return sources
+
+    def _build_data_sources_summary_markdown(self) -> str:
+        """Renders the Markdown summary table for data sources."""
+        sources = self.get_data_sources_summary()
+        if not sources:
+            return ""
+
+        md_lines = [
+            "### Data Sources Summary",
+            "",
+            "| Source Type | Connection / Details | Server | Database / Object | Data Pipeline / Staging |",
+            "| :--- | :--- | :--- | :--- | :--- |",
+        ]
+        for s in sources:
+            stype = f"`{s['source_type']}`"
+            conn = f"`{s['connection']}`" if s["connection"] != "—" else "—"
+            srv = f"`{s['server']}`" if s["server"] != "—" else "—"
+            db = f"`{s['database']}`" if s["database"] != "—" else "—"
+            pipe = s["pipeline"]
+            md_lines.append(f"| {stype} | {conn} | {srv} | {db} | {pipe} |")
+        return "\n".join(md_lines)
 
     def _build_topology_chapter(self) -> str:
         """Star Schema, Snowflake Outriggers & Relationships."""

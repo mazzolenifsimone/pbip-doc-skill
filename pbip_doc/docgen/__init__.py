@@ -12,6 +12,7 @@ from .index_doc import IndexDocBuilder
 from .visual_doc import PageVisualDocBuilder, VisualDocLabels
 from .engine import MarkdownDocGenerator
 from .html_engine import HtmlDocGenerator
+from .workspace_engine import WorkspaceDocGenerator, WorkspaceHtmlLayoutBuilder
 
 __all__ = [
     "DocGenConfig",
@@ -24,5 +25,7 @@ __all__ = [
     "VisualDocLabels",
     "MarkdownDocGenerator",
     "HtmlDocGenerator",
+    "WorkspaceDocGenerator",
+    "WorkspaceHtmlLayoutBuilder",
 ]
 

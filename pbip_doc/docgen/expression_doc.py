@@ -164,12 +164,15 @@ class ExpressionDocBuilder:
             "",
             f"**Type**: {badge} | **Steps**: `{len(self.steps)}` | **Downstream Tables**: `{len(self.downstream_tables)}` | **Sources**: `{len(self.root_sources)}`",
             "",
-            "## Overview & ETL Purpose",
+            "## Description",
+            "",
         ]
 
         if self.description:
             lines.append(f"> {self.description}")
-            lines.append("")
+        else:
+            lines.append("*No description provided.*")
+        lines.append("")
 
         if self.expression_type == "INLINE_TABLE":
             col_count = len(self.inline_cols)

@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
-  "name": "2bf614bdd7cd000b24d6",
+  "name": "866a14bd31151f797492",
   "position": {
-    "x": 169.41176470588235,
-    "y": 110.99391480730223,
-    "z": 0,
-    "height": 863.61054766734276,
-    "width": 838.29614604462472,
-    "tabOrder": 0
+    "x": 960,
+    "y": 89.57403651115618,
+    "z": 1,
+    "height": 834.40162271805275,
+    "width": 891.84584178498983,
+    "tabOrder": 1
   },
   "visual": {
     "visualType": "clusteredBarChart",
@@ -23,11 +23,11 @@
                       "Entity": "Sales Territory"
                     }
                   },
-                  "Property": "Group"
+                  "Property": "Region"
                 }
               },
-              "queryRef": "Sales Territory.Group",
-              "nativeQueryRef": "Group",
+              "queryRef": "Sales Territory.Region",
+              "nativeQueryRef": "Region",
               "active": true
             }
           ]
@@ -55,18 +55,19 @@
         "sort": [
           {
             "field": {
-              "Column": {
+              "Measure": {
                 "Expression": {
                   "SourceRef": {
-                    "Entity": "Sales Territory"
+                    "Entity": "Sales"
                   }
                 },
-                "Property": "Group"
+                "Property": "Sales"
               }
             },
             "direction": "Descending"
           }
-        ]
+        ],
+        "isDefaultSort": true
       }
     },
     "objects": {
@@ -170,8 +171,13 @@
           "properties": {
             "text": {
               "expr": {
-                "Literal": {
-                  "Value": "'All Group Sales'"
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Sales"
+                    }
+                  },
+                  "Property": "MeasureTestTitle"
                 }
               }
             }

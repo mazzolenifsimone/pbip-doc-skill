@@ -1050,6 +1050,33 @@ table FactSales
         self.assertIn("## Incremental Refresh Policy", md)
         self.assertIn("No Incremental Refresh Configured", md)
 
+    def test_table_doc_data_sources_summary_under_description(self):
+        from pbip_doc.docgen.table_doc import TableDocBuilder
+        table_data = {
+            "name": "Sales",
+            "role": "FACT",
+            "description": "Fact table for sales transactions.",
+            "source_type": "PowerQuery",
+            "root_data_sources": [
+                {
+                    "source_type": "SQL_SERVER",
+                    "connection_string": "az-synapse-dw.windows.net / RetailMart",
+                    "server": "az-synapse-dw.windows.net",
+                    "database": "RetailMart",
+                }
+            ],
+            "upstream_queries_chain": ["Staging_Orders"],
+            "columns": [{"name": "OrderID", "data_type": "int64"}],
+        }
+        full_model = {"tables": [table_data], "measures": [], "relationships": []}
+        builder = TableDocBuilder(table_data, full_model)
+        md = builder.build_markdown()
+
+        self.assertIn("## Description", md)
+        self.assertIn("> Fact table for sales transactions.", md)
+        self.assertIn("### Data Sources Summary", md)
+        self.assertIn("| `SQL_SERVER` | `az-synapse-dw.windows.net / RetailMart` | `az-synapse-dw.windows.net` | `RetailMart` | Staging_Orders ➔ Sales |", md)
+
 
 class TestMInlineTableParser(unittest.TestCase):
     def test_parse_typed_inline_table(self):
@@ -2712,6 +2739,94 @@ class TestIndexDocumentationReachability(unittest.TestCase):
         docs = gen.generate_all_documents(model_data)
         self.assertIn("CUSTOM_INDEX.md", docs)
         self.assertNotIn("ReachabilityModel.md", docs)
+
+
+
+class TestTmdlDocComments(unittest.TestCase):
+    def test_tmdl_doc_comments_table_columns_and_measures(self):
+        tmdl_content = """/// Geographic sales territories.
+table 'Sales Territory'
+\tlineageTag: a1b2c3d4
+
+\t/// Territory region.
+\tcolumn Region
+\t\tdataType: string
+\t\tsourceColumn: Region
+
+\t/// Territory country.
+\tcolumn Country
+\t\tdataType: string
+\t\tsourceColumn: Country
+
+\t/// Territory group (e.g. North America).
+\tcolumn Group
+\t\tdataType: string
+\t\tsourceColumn: Group
+
+\t/// Multi-line comment for column
+\t/// with details on second line.
+\tcolumn Details
+\t\tdataType: string
+\t\tsourceColumn: Details
+
+\t/// Column where explicit description overrides doc comment
+\tcolumn Overridden
+\t\tdataType: string
+\t\tdescription: "Explicit description override"
+\t\tsourceColumn: Overridden
+
+\t/// Sales minus Cost.
+\tmeasure Profit = [Sales] - [Cost]
+\t\tformatString: "$#,0.00"
+
+\t/// Measure with explicit description override
+\tmeasure OverriddenMeasure = 100
+\t\tdescription: "Explicit measure description"
+
+\tpartition 'Sales Territory' = m
+\t\tmode: import
+\t\tsource = Source
+"""
+        parser = PBIPParser()
+        tbl, measures, _ = parser._parse_single_table_tmdl(tmdl_content, "Sales Territory")
+
+        # Table description
+        self.assertEqual(tbl.description, "Geographic sales territories.")
+
+        # Column descriptions
+        col_map = {c.name: c.description for c in tbl.columns}
+        self.assertEqual(col_map.get("Region"), "Territory region.")
+        self.assertEqual(col_map.get("Country"), "Territory country.")
+        self.assertEqual(col_map.get("Group"), "Territory group (e.g. North America).")
+        self.assertEqual(col_map.get("Details"), "Multi-line comment for column\nwith details on second line.")
+        self.assertEqual(col_map.get("Overridden"), "Explicit description override")
+
+        # Measure descriptions
+        meas_map = {m.name: m.description for m in measures}
+        self.assertEqual(meas_map.get("Profit"), "Sales minus Cost.")
+        self.assertEqual(meas_map.get("OverriddenMeasure"), "Explicit measure description")
+
+    def test_tmdl_doc_comments_expressions_and_functions(self):
+        expr_content = """/// Shared customer dimension data source.
+expression DimCustomerSource = let
+    Source = Sql.Database("server", "db")
+in
+    Source
+    lineageTag: 1234-5678
+"""
+        fn_content = """/// Safely computes percentage division.
+function SafePercent = (num: double, den: double) => if den == 0 then 0 else num / den
+\tdataType: double
+"""
+        parser = PBIPParser()
+        raw_queries: Dict[str, Dict[str, Any]] = {}
+        parser._parse_tmdl_expressions(expr_content, raw_queries)
+        self.assertIn("DimCustomerSource", raw_queries)
+        self.assertEqual(raw_queries["DimCustomerSource"]["description"], "Shared customer dimension data source.")
+
+        functions = parser._parse_tmdl_functions(fn_content)
+        self.assertEqual(len(functions), 1)
+        self.assertEqual(functions[0].description, "Safely computes percentage division.")
 
 
 if __name__ == "__main__":
