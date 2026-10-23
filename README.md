@@ -88,7 +88,7 @@ The documentation workflow is designed in **two independent, modular phases**:
 │   │   └── engine.py              # Documentation orchestrator
 │   └── cli.py                     # Command-line interface (CLI)
 ├── samples/                       # Sample PBIP models for testing
-│   ├── AdventureWorks Sales/      # PBIP project (.SemanticModel + .Report)
+│   ├── AdventureWorks_Sales/      # PBIP project (.SemanticModel + .Report)
 │   └── retail_sales_bim/          # TMSL model.bim file
 ├── tests/                         # Unit tests (standard unittest)
 │   ├── __init__.py
@@ -118,16 +118,16 @@ The tool runs with **Python 3.8+** using standard CLI commands. No extra package
 
 ```bash
 # 1. Generate Modular Markdown Documentation (Tables, Measures, Visuals, <project_name>.md)
-python generate_docs.py "samples/AdventureWorks Sales" -o ./docs
+python generate_docs.py "samples/AdventureWorks_Sales" -o ./docs
 
 # 2. Extract Complete Enriched JSON
-python generate_json.py extract "samples/AdventureWorks Sales" -o semantic_model_docs.json
+python generate_json.py extract "samples/AdventureWorks_Sales" -o semantic_model_docs.json
 
 # 3. Quick Console Inspection Summary
-python generate_json.py inspect "samples/AdventureWorks Sales"
+python generate_json.py inspect "samples/AdventureWorks_Sales"
 
 # 4. Quick Report Presentation Summary
-python generate_json.py report-inspect "samples/AdventureWorks Sales"
+python generate_json.py report-inspect "samples/AdventureWorks_Sales"
 
 # 5. Run the Test Suite
 python -m unittest discover tests
@@ -329,13 +329,13 @@ In architectures using a central **Golden Dataset** with multiple thin reports (
 Prints an overview of data sources, table classifications, calculated columns, and DAX dependencies:
 
 ```bash
-python generate_json.py inspect "samples/AdventureWorks Sales"
+python generate_json.py inspect "samples/AdventureWorks_Sales"
 ```
 
 Example output:
 ```text
 ======================================================================
-PBIP SEMANTIC MODEL: AdventureWorks Sales (Format: TMDL)
+PBIP SEMANTIC MODEL: AdventureWorks_Sales (Format: TMDL)
 ======================================================================
 [!] Excluded Auto Tables: 1 (Filter active: True)
 
@@ -380,7 +380,7 @@ PBIP SEMANTIC MODEL: AdventureWorks Sales (Format: TMDL)
 Generates a complete metadata JSON file:
 
 ```bash
-python generate_json.py extract "samples/AdventureWorks Sales" -o output_documentation.json --indent 2
+python generate_json.py extract "samples/AdventureWorks_Sales" -o output_documentation.json --indent 2
 ```
 
 From a `model.bim` file:
@@ -394,7 +394,7 @@ Generates a dedicated Markdown document for every table, measure, function, expr
 
 ```bash
 # From a PBIP directory
-python generate_docs.py "samples/AdventureWorks Sales" -o ./docs
+python generate_docs.py "samples/AdventureWorks_Sales" -o ./docs
 
 # Or from an extracted JSON file
 python generate_docs.py ./output_documentation.json -o ./docs
@@ -403,7 +403,7 @@ python generate_docs.py ./output_documentation.json -o ./docs
 Generated directory structure:
 ```text
 docs/
-├── AdventureWorks Sales.md      # Master catalog (<project_name>.md)
+├── AdventureWorks_Sales.md      # Master catalog (<project_name>.md)
 ├── tables/
 │   ├── FactInternetSales.md     # Fact table document
 │   ├── DimCustomer.md           # Dimension document

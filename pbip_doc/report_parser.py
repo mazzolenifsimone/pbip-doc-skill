@@ -53,6 +53,19 @@ SLICING_COORDINATE_ROLES = {
 }
 
 
+def parse_measure_reference(ref_str: str) -> Tuple[str, str]:
+    """Parses 'Table'[Measure] or Table[Measure] or [Measure] into (table, field)."""
+    if not ref_str:
+        return "", ""
+    ref = ref_str.strip()
+    m = re.match(r"^(?:(?:'([^']+)')|([A-Za-z0-9_ ]+))?\[([^\]]+)\]$", ref)
+    if m:
+        table = (m.group(1) or m.group(2) or "").strip()
+        field = m.group(3).strip()
+        return table, field
+    return "", ref
+
+
 def _extract_source_entity(expr_obj: Optional[Dict[str, Any]], alias_map: Optional[Dict[str, str]] = None) -> Optional[str]:
     """Resolves table / entity name from an expression tree."""
     if not expr_obj or not isinstance(expr_obj, dict):
@@ -716,7 +729,12 @@ class ReportParser:
 
             # Object expression scanning for dynamic text / conditional formatting
             known_keys = {m.model_key for m in evaluated_metrics}
-            for obj_container in [vjson.get("visualContainerObjects"), vjson.get("objects"), v_info.get("objects")]:
+            for obj_container in [
+                vjson.get("visualContainerObjects"),
+                v_info.get("visualContainerObjects"),
+                vjson.get("objects"),
+                v_info.get("objects"),
+            ]:
                 if obj_container:
                     dyn_exprs = _find_dynamic_expressions(obj_container)
                     for tbl, prop, f_type, agg in dyn_exprs:
@@ -739,6 +757,8 @@ class ReportParser:
             if not title:
                 title = self._synthesize_visual_title(visual_type, evaluated_metrics, slicing_coordinates, is_slicer)
                 is_conditional = False
+            elif is_conditional:
+                self._ensure_conditional_title_metric(title, evaluated_metrics)
 
             calc_context = CalculationContext(
                 evaluated_metrics=evaluated_metrics,
@@ -1051,6 +1071,8 @@ class ReportParser:
             if not title:
                 title = self._synthesize_visual_title(visual_type, evaluated_metrics, slicing_coordinates, is_slicer)
                 is_conditional = False
+            elif is_conditional:
+                self._ensure_conditional_title_metric(title, evaluated_metrics)
 
             calc_context = CalculationContext(
                 evaluated_metrics=evaluated_metrics,
@@ -1217,14 +1239,23 @@ class ReportParser:
         if not vjson or not isinstance(vjson, dict):
             return None, False
 
+        visual_dict = vjson.get("visual", {}) if isinstance(vjson.get("visual"), dict) else {}
+        single_visual = vjson.get("singleVisual", {}) if isinstance(vjson.get("singleVisual"), dict) else {}
+
         candidate_containers = [
+            visual_dict.get("visualContainerObjects", {}),
+            visual_dict.get("vcObjects", {}),
+            visual_dict.get("objects", {}),
             vjson.get("visualContainerObjects", {}),
-            vjson.get("singleVisual", {}).get("vcObjects", {}),
             vjson.get("vcObjects", {}),
-            vjson.get("visual", {}).get("objects", {}),
             vjson.get("objects", {}),
-            vjson.get("singleVisual", {}).get("objects", {}),
+            single_visual.get("visualContainerObjects", {}),
+            single_visual.get("vcObjects", {}),
+            single_visual.get("objects", {}),
         ]
+        if "title" in vjson:
+            candidate_containers.append(vjson)
+
         for container in candidate_containers:
             if not isinstance(container, dict):
                 continue
@@ -1233,9 +1264,13 @@ class ReportParser:
                 t_props = title_objs[0].get("properties", {})
                 
                 # Check title visibility (show property)
-                show_prop = t_props.get("show", {}).get("expr", {}).get("Literal", {}).get("Value")
-                if show_prop is not None:
-                    clean_show = str(show_prop).strip("'\"").lower()
+                show_prop = t_props.get("show")
+                if isinstance(show_prop, dict):
+                    show_val = show_prop.get("expr", {}).get("Literal", {}).get("Value")
+                else:
+                    show_val = show_prop
+                if show_val is not None:
+                    clean_show = str(show_val).strip("'\"").lower()
                     if clean_show in ("false", "0"):
                         # Title explicitly turned off in Power BI format pane!
                         return None, False
@@ -1245,7 +1280,7 @@ class ReportParser:
                     expr = text_prop.get("expr", text_prop)
                     lit_val = expr.get("Literal", {}).get("Value") if isinstance(expr, dict) else None
                     if lit_val is not None:
-                        clean_title = str(lit_val).strip("'")
+                        clean_title = str(lit_val).strip("'\"")
                         if clean_title:
                             return clean_title, False
                     tbl, prop, _, _ = _extract_field_details(expr, alias_map)
@@ -1262,6 +1297,48 @@ class ReportParser:
                         elif dprop:
                             return f"[{dprop}]", True
         return None, False
+
+    def _ensure_conditional_title_metric(self, title: str, evaluated_metrics: List[EvaluatedMetric]) -> None:
+        """
+        Ensures that the measure used for a conditional visual title is explicitly
+        included in evaluated_metrics with role='Conditional Title'.
+        """
+        if not title:
+            return
+
+        tbl, prop = parse_measure_reference(title)
+        if not prop:
+            return
+
+        # Check if already present in evaluated_metrics (e.g. from dynamic properties scanner)
+        for em in evaluated_metrics:
+            is_match = False
+            if tbl and em.table and em.table.lower() == tbl.lower() and em.field.lower() == prop.lower():
+                is_match = True
+            elif not tbl and em.field.lower() == prop.lower():
+                is_match = True
+            elif em.field.lower() == prop.lower():
+                is_match = True
+
+            if is_match:
+                em.role = "Conditional Title"
+                if tbl and (not em.table or em.table in ("Unknown", "Model")):
+                    em.table = tbl
+                    em.model_key = f"{tbl}[{prop}]"
+                return
+
+        # Not present: add it explicitly
+        tbl_name = tbl or "Model"
+        m_key = f"{tbl_name}[{prop}]" if tbl else f"[{prop}]"
+        evaluated_metrics.append(
+            EvaluatedMetric(
+                table=tbl_name,
+                field=prop,
+                field_type="MEASURE",
+                role="Conditional Title",
+                model_key=m_key,
+            )
+        )
 
     def _synthesize_visual_title(
         self,

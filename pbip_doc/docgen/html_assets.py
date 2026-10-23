@@ -13,19 +13,36 @@ STYLE_CSS = """/* pbip-doc-skill - Enterprise BI Documentation Stylesheet */
   --bg-body: #eaedf0;
   --bg-surface: #f5f7f9;
   --bg-surface-hover: #e2e6eb;
-  --bg-sidebar: #1e2229;
-  --bg-sidebar-hover: #2a2f38;
-  --bg-code: #1e2229;
+  --bg-sidebar: #f8fafc;
+  --bg-sidebar-hover: #edf2f7;
+  --bg-sidebar-active: #e2e8f0;
+  --bg-sidebar-input: #ffffff;
+  --bg-sidebar-badge: #e2e8f0;
+
+  /* Code Cells (Adaptive) */
+  --bg-code: #ffffff;
+  --bg-code-header: #f1f3f5;
+  --border-code: #cbd2d9;
+  --text-code: #1f2328;
+  --text-code-muted: #57606a;
+  --bg-copy-btn: #ffffff;
+  --border-copy-btn: #cbd2d9;
+  --text-copy-btn: #24292f;
+  --bg-copy-btn-hover: #e9ecef;
+
+  /* Global Scrollbars */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #cbd2d9;
+  --scrollbar-thumb-hover: #9ca3af;
   
   --text-main: #24292f;
   --text-muted: #57606a;
-  --text-sidebar: #9ca3af;
-  --text-sidebar-bright: #ffffff;
-  --text-code: #e2e8f0;
+  --text-sidebar: #57606a;
+  --text-sidebar-bright: #1f2328;
   
   --border-color: #cbd2d9;
   --border-subtle: #dde2e6;
-  --border-sidebar: #2d333b;
+  --border-sidebar: #cbd2d9;
   
   --primary: #1e2229;
   --primary-hover: #374151;
@@ -100,15 +117,32 @@ STYLE_CSS = """/* pbip-doc-skill - Enterprise BI Documentation Stylesheet */
   --bg-body: #16181d;
   --bg-surface: #21252d;
   --bg-surface-hover: #2b313b;
-  --bg-sidebar: #121418;
-  --bg-sidebar-hover: #1b1e24;
-  --bg-code: #121418;
+  --bg-sidebar: #181a1f;
+  --bg-sidebar-hover: #22262e;
+  --bg-sidebar-active: #2b313b;
+  --bg-sidebar-input: #121418;
+  --bg-sidebar-badge: rgba(255, 255, 255, 0.08);
+
+  /* Code Cells Dark Mode (Adaptive) */
+  --bg-code: #14161a;
+  --bg-code-header: #1b1e24;
+  --border-code: #2d333b;
+  --text-code: #e2e8f0;
+  --text-code-muted: #8b949e;
+  --bg-copy-btn: rgba(255, 255, 255, 0.08);
+  --border-copy-btn: rgba(255, 255, 255, 0.15);
+  --text-copy-btn: #e2e8f0;
+  --bg-copy-btn-hover: rgba(255, 255, 255, 0.16);
+
+  /* Global Scrollbars Dark Mode */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #343a46;
+  --scrollbar-thumb-hover: #4b5563;
   
   --text-main: #d0d7de;
   --text-muted: #8b949e;
   --text-sidebar: #9da7b3;
   --text-sidebar-bright: #f0f3f6;
-  --text-code: #d0d7de;
   
   --border-color: #343a46;
   --border-subtle: #272c35;
@@ -182,6 +216,31 @@ STYLE_CSS = """/* pbip-doc-skill - Enterprise BI Documentation Stylesheet */
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Global Uniform Scrollbars (WebKit & Blink) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
@@ -254,6 +313,11 @@ a:hover, a:focus {
   text-overflow: ellipsis;
 }
 
+.sidebar-title-link:hover {
+  color: var(--text-sidebar-bright);
+  text-decoration: none;
+}
+
 .sidebar-title-icon {
   width: 18px;
   height: 18px;
@@ -268,8 +332,9 @@ a:hover, a:focus {
   letter-spacing: 0.05em;
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-sidebar-bright);
+  background-color: var(--bg-sidebar-badge);
+  color: var(--text-sidebar);
+  border: 1px solid var(--border-sidebar);
 }
 
 .sidebar-search-container {
@@ -295,23 +360,24 @@ a:hover, a:focus {
 .search-input {
   width: 100%;
   padding: 0.45rem 0.6rem 0.45rem 2.2rem;
-  background: rgba(255, 255, 255, 0.06);
+  background-color: var(--bg-sidebar-input);
   border: 1px solid var(--border-sidebar);
   border-radius: var(--radius-sm);
   color: var(--text-sidebar-bright);
   font-size: 0.825rem;
   outline: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .search-input:focus {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--primary);
+  background-color: var(--bg-sidebar-input);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 .search-input::placeholder {
   color: var(--text-sidebar);
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 .sidebar-nav {
@@ -334,7 +400,7 @@ a:hover, a:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .nav-list {
@@ -366,9 +432,17 @@ a:hover, a:focus {
 }
 
 .nav-link.active {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--bg-sidebar-active);
   color: var(--text-sidebar-bright);
   font-weight: 600;
+}
+
+.nav-item-badge {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
 }
 
 .nav-subgroup-header {
@@ -381,6 +455,7 @@ a:hover, a:focus {
   font-weight: 600;
   cursor: pointer;
   border-radius: var(--radius-sm);
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .nav-subgroup-header:hover {
@@ -852,7 +927,7 @@ a:hover, a:focus {
 /* Code Snippets & Containers */
 .code-container {
   background-color: var(--bg-code);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-code);
   border-radius: var(--radius-md);
   overflow: hidden;
   margin: 0.75rem 0;
@@ -862,18 +937,19 @@ a:hover, a:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.85rem;
-  background-color: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.45rem 0.85rem;
+  background-color: var(--bg-code-header);
+  border-bottom: 1px solid var(--border-code);
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  color: var(--text-code);
+  color: var(--text-code-muted);
 }
 
 .code-container pre {
   padding: 1rem;
   overflow-x: auto;
   margin: 0;
+  background-color: transparent;
 }
 
 .code-container code {
@@ -887,18 +963,31 @@ a:hover, a:focus {
 }
 
 .copy-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: var(--text-code);
+  background-color: var(--bg-copy-btn);
+  border: 1px solid var(--border-copy-btn);
+  color: var(--text-copy-btn);
   padding: 0.2rem 0.55rem;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .copy-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background-color: var(--bg-copy-btn-hover);
+  color: var(--text-copy-btn);
+}
+
+/* Inline Code Elements */
+:not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.825em;
+  background-color: var(--bg-surface-hover);
+  color: var(--text-main);
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
 }
 
 /* Visual Container Cards */
@@ -993,7 +1082,12 @@ APP_JS = """// pbip-doc-skill - Enterprise Wiki Client Application
 
   // 1. Theme Management (System preference + LocalStorage persistence)
   function initTheme() {
-    const savedTheme = localStorage.getItem('pbip_wiki_theme') || 'auto';
+    let savedTheme = 'auto';
+    try {
+      savedTheme = localStorage.getItem('pbip_wiki_theme') || 'auto';
+    } catch (e) {
+      // Graceful fallback if localStorage is blocked by sandboxed iframe / security policy
+    }
     applyTheme(savedTheme);
 
     const btn = document.getElementById('theme-toggle-btn');
@@ -1004,7 +1098,9 @@ APP_JS = """// pbip-doc-skill - Enterprise Wiki Client Application
         if (current === 'dark') next = 'light';
         else if (current === 'light') next = 'auto';
         
-        localStorage.setItem('pbip_wiki_theme', next);
+        try {
+          localStorage.setItem('pbip_wiki_theme', next);
+        } catch (e) {}
         applyTheme(next);
       });
     }
@@ -1136,27 +1232,50 @@ APP_JS = """// pbip-doc-skill - Enterprise Wiki Client Application
     });
   }
 
-  // 4. One-Click Copy to Clipboard
+  // 4. One-Click Copy to Clipboard (Universal Clipboard API + execCommand Fallback)
   function initCopyButtons() {
     const copyBtns = document.querySelectorAll('.copy-btn');
     copyBtns.forEach(btn => {
       btn.addEventListener('click', function() {
         const targetId = this.getAttribute('data-copy-target');
         const targetEl = document.getElementById(targetId);
-        if (targetEl) {
-          const textToCopy = targetEl.textContent;
-          navigator.clipboard.writeText(textToCopy).then(() => {
-            const originalText = this.textContent;
-            this.textContent = 'Copied!';
-            this.style.background = 'rgba(34, 197, 94, 0.2)';
-            setTimeout(() => {
-              this.textContent = originalText;
-              this.style.background = '';
-            }, 1500);
+        if (!targetEl) return;
+        const textToCopy = targetEl.textContent;
+
+        function markSuccess() {
+          const originalText = btn.textContent;
+          btn.textContent = 'Copied!';
+          btn.style.background = 'rgba(34, 197, 94, 0.2)';
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+          }, 1500);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(textToCopy).then(markSuccess).catch(() => {
+            fallbackCopy(textToCopy, markSuccess);
           });
+        } else {
+          fallbackCopy(textToCopy, markSuccess);
         }
       });
     });
+  }
+
+  function fallbackCopy(text, onSuccess) {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (onSuccess) onSuccess();
+    } catch (err) {}
   }
 
   // 5. Sidebar Navigation Live Filter

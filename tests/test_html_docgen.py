@@ -266,14 +266,14 @@ class TestHtmlBuilders(unittest.TestCase):
 class TestHtmlDocGeneratorEndToEnd(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix="pbip_html_test_")
-        self.sample_dir = Path("samples/AdventureWorks Sales")
+        self.sample_dir = Path("samples/AdventureWorks_Sales")
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_adventureworks_html_generation(self):
         if not self.sample_dir.exists():
-            self.skipTest("Sample directory 'AdventureWorks Sales' not found.")
+            self.skipTest("Sample directory 'AdventureWorks_Sales' not found.")
 
         parser = PBIPParser()
         model = parser.parse(str(self.sample_dir))

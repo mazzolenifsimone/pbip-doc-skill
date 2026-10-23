@@ -500,7 +500,7 @@ class TestReportParser(unittest.TestCase):
     def test_samples_integration_if_present(self):
         """Integration test against actual samples in the workspace if they exist."""
         samples_root = Path(__file__).resolve().parent.parent / "samples"
-        pbir_aw = samples_root / "AdventureWorks Sales" / "AdventureWorks Sales.Report"
+        pbir_aw = samples_root / "AdventureWorks_Sales" / "AdventureWorks_Sales.Report"
 
         if pbir_aw.exists():
             parser = ReportParser()
@@ -1372,6 +1372,106 @@ class TestReportExternalSourcesLinking(unittest.TestCase):
         self.assertNotIn("../tables/DimRemoteStore.md", md)
         self.assertIn("`DimRemoteStore` *(Inherited Entity)*", md)
         self.assertIn("`[DimRemoteStore[RemoteRevenue]]` *(External)*", md)
+
+    def test_extract_custom_title(self):
+        parser = ReportParser()
+        # 1. Modern leaf visual with literal title in visual.visualContainerObjects
+        vjson_literal = {
+            "visual": {
+                "visualType": "clusteredBarChart",
+                "visualContainerObjects": {
+                    "title": [
+                        {
+                            "properties": {
+                                "show": {"expr": {"Literal": {"Value": "true"}}},
+                                "text": {"expr": {"Literal": {"Value": "'All Group Sales'"}}},
+                            }
+                        }
+                    ]
+                },
+            }
+        }
+        title, is_cond = parser._extract_custom_title(vjson_literal, {})
+        self.assertEqual(title, "All Group Sales")
+        self.assertFalse(is_cond)
+
+        # 2. Modern leaf visual with conditional title (DAX measure) in visual.visualContainerObjects
+        vjson_cond = {
+            "visual": {
+                "visualType": "clusteredBarChart",
+                "visualContainerObjects": {
+                    "title": [
+                        {
+                            "properties": {
+                                "show": {"expr": {"Literal": {"Value": "true"}}},
+                                "text": {
+                                    "expr": {
+                                        "Measure": {
+                                            "Expression": {"SourceRef": {"Source": "s"}},
+                                            "Property": "MeasureTitleTest",
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    ]
+                },
+            }
+        }
+        alias_map = {"s": "Sales"}
+        title, is_cond = parser._extract_custom_title(vjson_cond, alias_map)
+        self.assertEqual(title, "Sales[MeasureTitleTest]")
+        self.assertTrue(is_cond)
+
+        # 3. Disabled title (show is false)
+        vjson_disabled = {
+            "visual": {
+                "visualContainerObjects": {
+                    "title": [
+                        {
+                            "properties": {
+                                "show": {"expr": {"Literal": {"Value": "false"}}},
+                                "text": {"expr": {"Literal": {"Value": "'Hidden Title'"}}},
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        title, is_cond = parser._extract_custom_title(vjson_disabled, {})
+        self.assertIsNone(title)
+        self.assertFalse(is_cond)
+
+    def test_ensure_conditional_title_metric(self):
+        parser = ReportParser()
+
+        # Case 1: Existing metric with DynamicProperty role gets updated to Conditional Title
+        metrics = [
+            EvaluatedMetric(
+                table="Sales",
+                field="MeasureTitleTest",
+                field_type="MEASURE",
+                role="DynamicProperty",
+                model_key="Sales[MeasureTitleTest]",
+            )
+        ]
+        parser._ensure_conditional_title_metric("Sales[MeasureTitleTest]", metrics)
+        self.assertEqual(len(metrics), 1)
+        self.assertEqual(metrics[0].role, "Conditional Title")
+
+        # Case 2: New metric not in list gets appended with role Conditional Title
+        parser._ensure_conditional_title_metric("Customer[DynamicHeader]", metrics)
+        self.assertEqual(len(metrics), 2)
+        self.assertEqual(metrics[1].table, "Customer")
+        self.assertEqual(metrics[1].field, "DynamicHeader")
+        self.assertEqual(metrics[1].role, "Conditional Title")
+        self.assertEqual(metrics[1].model_key, "Customer[DynamicHeader]")
+
+        # Case 3: Title formatted as [StandaloneMeasure]
+        parser._ensure_conditional_title_metric("[StandaloneMeasure]", metrics)
+        self.assertEqual(len(metrics), 3)
+        self.assertEqual(metrics[2].field, "StandaloneMeasure")
+        self.assertEqual(metrics[2].role, "Conditional Title")
 
 
 if __name__ == "__main__":

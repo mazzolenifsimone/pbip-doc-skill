@@ -120,13 +120,13 @@ To disable or customize visual documentation via CLI:
 
 ```bash
 # Disable visuals generation entirely
-python generate_docs.py "samples/AdventureWorks Sales" --no-visuals
+python generate_docs.py "samples/AdventureWorks_Sales" --no-visuals
 
 # Disable SVG canvas mini-maps (generates text-only visual catalogs)
-python generate_docs.py "samples/AdventureWorks Sales" --no-visual-svg-maps
+python generate_docs.py "samples/AdventureWorks_Sales" --no-visual-svg-maps
 
 # Customize visuals output folder
-python generate_docs.py "samples/AdventureWorks Sales" --visuals-dir "report_pages"
+python generate_docs.py "samples/AdventureWorks_Sales" --visuals-dir "report_pages"
 
 # Explicitly specify report path if not colocated
 python generate_docs.py "path/to/Model.SemanticModel" --report-path "path/to/Custom.Report"

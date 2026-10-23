@@ -4,7 +4,7 @@
   "artifacts": [
     {
       "report": {
-        "path": "AdventureWorks Sales.Report"
+        "path": "AdventureWorks_Sales.Report"
       }
     }
   ],

@@ -3,7 +3,7 @@
   "version": "4.0",
   "datasetReference": {
     "byPath": {
-      "path": "../AdventureWorks Sales.SemanticModel"
+      "path": "../AdventureWorks_Sales.SemanticModel"
     }
   }
 }

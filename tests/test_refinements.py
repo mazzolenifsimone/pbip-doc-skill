@@ -335,16 +335,18 @@ class TestConditionalVisualTitles(unittest.TestCase):
         )
         report = PBIPReportModel(report_name="Rep", format="PBIR", source_path="mock", pages=[page])
 
-        # 1. Test Markdown: title heading has *(Conditional Title)*
+        # 1. Test Markdown: title heading has *(Conditional Title)* and metric is in Evaluated DAX Metrics
         doc_builder = PageVisualDocBuilder(page=page, report_model=report)
         md = doc_builder.build_markdown()
         self.assertIn("### 1. Sales[DynamicTitle] *(Conditional Title)*", md)
+        self.assertIn("*(Role: Conditional Title)*", md)
 
-        # 2. Test HTML: visual card header has badge Conditional Title
+        # 2. Test HTML: visual card header has badge Conditional Title and metric is in Evaluated Metrics
         html_builder = HtmlVisualBuilder(page=page, report_model=report, config=DocGenConfig())
         html = html_builder.build_content()
         self.assertIn("Sales[DynamicTitle]", html)
         self.assertIn('class="badge badge-dim" style="margin-left: 0.5rem;">Conditional Title</span>', html)
+        self.assertIn("(Role: Conditional Title)", html)
 
 
 if __name__ == "__main__":

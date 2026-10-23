@@ -21,6 +21,7 @@ from ..report_schema import (
     PagePanelFilter,
     PageSlicer,
 )
+from ..report_parser import parse_measure_reference
 
 
 
@@ -156,6 +157,10 @@ class PageVisualDocBuilder:
         for v in dynamic_visuals:
             for m in v.calculation_context.evaluated_metrics:
                 all_metrics.append(m.model_key)
+            if v.is_conditional_title and v.title:
+                tbl, prop = parse_measure_reference(v.title)
+                if prop:
+                    all_metrics.append(f"{tbl}[{prop}]" if tbl else f"[{prop}]")
         distinct_metrics = sorted(set(all_metrics))
 
         data = {
@@ -345,9 +350,25 @@ class PageVisualDocBuilder:
         sections.append("\n".join(header_lines))
 
         # 2. Evaluated DAX Metrics
-        if calc.evaluated_metrics:
+        metrics_to_render = list(calc.evaluated_metrics)
+        if visual.is_conditional_title and visual.title:
+            has_cond = any(m.role == "Conditional Title" or (m.field and m.field in visual.title) for m in metrics_to_render)
+            if not has_cond:
+                tbl, prop = parse_measure_reference(visual.title)
+                if prop:
+                    metrics_to_render.append(
+                        EvaluatedMetric(
+                            table=tbl or "Model",
+                            field=prop,
+                            field_type="MEASURE",
+                            role="Conditional Title",
+                            model_key=f"{tbl}[{prop}]" if tbl else f"[{prop}]",
+                        )
+                    )
+
+        if metrics_to_render:
             m_lines = [f"{prefix}**{lbl.LABEL_EVALUATED_METRICS}**:"]
-            for m in calc.evaluated_metrics:
+            for m in metrics_to_render:
                 is_implicit = bool(m.aggregation) or m.field_type in ("IMPLICIT_MEASURE", "COLUMN")
                 m_link = self._format_metric_link(m)
                 agg_badge = f" ({lbl.AGGREGATION_PREFIX}: `{m.aggregation}`)" if m.aggregation else ""

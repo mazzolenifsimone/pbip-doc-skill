@@ -2655,15 +2655,15 @@ class TestIndexDocumentationReachability(unittest.TestCase):
         )
 
     def test_reachability_sample_adventureworks(self):
-        """Verify reachability on real PBIP sample: AdventureWorks Sales."""
-        adv_dir = Path("samples/AdventureWorks Sales")
+        """Verify reachability on real PBIP sample: AdventureWorks_Sales."""
+        adv_dir = Path("samples/AdventureWorks_Sales")
         if not adv_dir.exists():
-            self.skipTest("Sample AdventureWorks Sales directory not found")
+            self.skipTest("Sample AdventureWorks_Sales directory not found")
 
         gen = MarkdownDocGenerator()
         docs = gen.generate_all_documents(adv_dir)
 
-        index_name = "AdventureWorks Sales.md"
+        index_name = "AdventureWorks_Sales.md"
         self.assertIn(index_name, docs)
         index_content = docs[index_name]
         links = set(re.findall(r'\[.*?\]\(([^)]+)\)', index_content))
@@ -2679,7 +2679,7 @@ class TestIndexDocumentationReachability(unittest.TestCase):
         self.assertEqual(
             unreachable,
             [],
-            f"In AdventureWorks Sales sample, the following files are not linked in {index_name}: {unreachable}",
+            f"In AdventureWorks_Sales sample, the following files are not linked in {index_name}: {unreachable}",
         )
 
     def test_no_phantom_links_when_expressions_or_visuals_disabled(self):

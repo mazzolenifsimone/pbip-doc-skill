@@ -11,7 +11,8 @@ import html
 from .config import DocGenConfig
 from .utils import sanitize_filename, clean_project_name
 from .html_layout import get_relative_root, get_table_role_badge_class, get_table_role_short
-from ..report_schema import PBIPReportModel, VisualDefinition
+from ..report_schema import PBIPReportModel, VisualDefinition, EvaluatedMetric
+from ..report_parser import parse_measure_reference
 from ..dax_formatter import format_dax
 from ..m_formatter import format_m
 
@@ -1012,7 +1013,23 @@ class HtmlVisualBuilder:
 
             calc = v.calculation_context
             metrics_html = []
-            for m in calc.evaluated_metrics:
+            metrics_to_render = list(calc.evaluated_metrics)
+            if v.is_conditional_title and v.title:
+                has_cond = any(m.role == "Conditional Title" or (m.field and m.field in v.title) for m in metrics_to_render)
+                if not has_cond:
+                    tbl, prop = parse_measure_reference(v.title)
+                    if prop:
+                        metrics_to_render.append(
+                            EvaluatedMetric(
+                                table=tbl or "Model",
+                                field=prop,
+                                field_type="MEASURE",
+                                role="Conditional Title",
+                                model_key=f"{tbl}[{prop}]" if tbl else f"[{prop}]",
+                            )
+                        )
+
+            for m in metrics_to_render:
                 m_name = m.field
                 clean_m = sanitize_filename(m_name)
                 clean_tbl = sanitize_filename(m.table or "Model")

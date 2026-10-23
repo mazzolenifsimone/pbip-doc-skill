@@ -59,7 +59,7 @@ The normalized schema represents each visual as an autonomous, self-contained bu
 {
   "report_name": "Sales Performance",
   "format": "PBIR",
-  "source_path": "samples/AdventureWorks Sales/AdventureWorks Sales.Report",
+  "source_path": "samples/AdventureWorks_Sales/AdventureWorks_Sales.Report",
   "summary": {
     "total_pages": 4,
     "visible_pages": 3,
